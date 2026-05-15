@@ -51,7 +51,8 @@ class ProductController extends Controller
             'image_public_id'=> 'nullable|string|max:255',
         ]);
 
-        $data['sku'] = strtoupper('JEW-' . Str::random(8));
+        $last = \App\Models\Product::withTrashed()->max('id') ?? 0;
+        $data['sku'] = str_pad($last + 1, 6, '0', STR_PAD_LEFT);
         $data['branch_id'] = $request->user()->branch_id;
 
         if ($request->hasFile('image')) {

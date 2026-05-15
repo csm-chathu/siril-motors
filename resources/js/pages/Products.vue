@@ -150,11 +150,16 @@ function createBarcodeSvg(value) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   JsBarcode(svg, value, {
     format: 'CODE128',
-    width: 1.8,
-    height: 56,
+    width: 2,
+    height: 60,
     margin: 0,
+    marginLeft: 3,
+    marginRight: 3,
     displayValue: false,
   })
+  // preserveAspectRatio="none" forces the SVG to stretch to the container
+  // width rather than shrinking bars — critical for 203 DPI readability
+  svg.setAttribute('preserveAspectRatio', 'none')
   return svg.outerHTML
 }
 
@@ -185,30 +190,50 @@ function printProductBarcode(product) {
   <title>Label - ${safeSku}</title>
   <style>
     @page { size: 30mm 20mm; margin: 0; }
-    * { box-sizing: border-box; }
-    body {
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 30mm; height: 20mm;
       margin: 0; padding: 0;
-      font-family: 'Courier New', monospace;
       background: #fff;
-      width: 30mm;
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     .label {
       width: 30mm;
       height: 20mm;
-      padding: 0.5mm;
-      text-align: center;
-      overflow: hidden;
+      padding: 0.8mm 1.5mm 0.5mm;
       display: flex;
       flex-direction: column;
-      justify-content: flex-start;
+      align-items: center;
+      justify-content: space-between;
+      overflow: hidden;
     }
-    .shop  { display: none; }
-    .name  { font-size: 3pt; font-weight: bold; margin: 0.2mm 0; word-break: break-word; line-height: 1; }
-    .meta  { display: none; }
-    svg    { width: 100%; height: 15mm; display: block; flex-grow: 1; }
-    .sku   { font-size: 3pt; letter-spacing: 0.5px; margin: 0.2mm 0; line-height: 1; }
-    .price { display: none; }
-    hr     { display: none; }
+    .name {
+      font-size: 6.5pt;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      text-align: center;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    svg {
+      width: 100%;
+      height: 9.5mm;
+      display: block;
+      flex-shrink: 0;
+    }
+    .sku {
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-align: center;
+      margin-top: 0.4mm;
+      line-height: 1;
+    }
   </style>
 </head>
 <body>

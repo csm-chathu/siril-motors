@@ -77,7 +77,7 @@
     <template v-else-if="sale">
 
       <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-           POS / 76mm Thermal Receipt
+           POS / 80mm Thermal Receipt (POS-80)
       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
       <div v-show="printMode === 'pos'" id="receipt-wrapper">
         <div id="receipt" class="receipt-paper">
@@ -591,7 +591,7 @@ function printReceipt() {
   s.id = 'dyn-page-style'
   s.textContent = printMode.value === 'a5'
     ? `@media print { @page { size: A5; margin: 12mm 15mm; } }`
-    : `@media print { @page { size: 76mm auto; margin: 0; } }`
+    : `@media print { @page { size: 80mm auto; margin: 0; } }`
   document.head.appendChild(s)
   window.print()
 }
@@ -602,7 +602,7 @@ function buildDirectPrintHtml() {
   return `<!doctype html><html><head><meta charset="utf-8">
 <style>
   html,body{margin:0;padding:0;background:#fff;}
-  .receipt-paper{width:76mm;max-width:76mm;margin:0;padding:4mm 3mm;box-sizing:border-box;
+  .receipt-paper{width:80mm;max-width:80mm;margin:0;padding:3mm 4mm;box-sizing:border-box;
     font-family:'Courier New',Courier,monospace;font-size:11pt;line-height:1.45;color:#000;background:#fff;}
   .receipt-divider{border:none;border-top:1px dashed #aaa;margin:6px 0;}
   .receipt-divider-solid{border:none;border-top:1px solid #555;margin:6px 0;}
@@ -759,8 +759,8 @@ onMounted(async () => {
 
   /* POS mode */
   [data-print-mode="pos"] #invoice-wrapper { display: none !important; }
-  [data-print-mode="pos"] #receipt-wrapper { display:block !important; position:static !important; width:76mm !important; padding:0 !important; margin:0 auto !important; overflow:visible !important; }
-  [data-print-mode="pos"] .receipt-paper { width:76mm !important; max-width:76mm !important; margin:0 !important; padding:4mm 3mm !important; box-shadow:none !important; border-radius:0 !important; font-size:11pt !important; font-family:'Courier New',Courier,monospace !important; color:#000 !important; background:#fff !important; }
+  [data-print-mode="pos"] #receipt-wrapper { display:block !important; position:static !important; width:80mm !important; padding:0 !important; margin:0 !important; overflow:visible !important; }
+  [data-print-mode="pos"] .receipt-paper { width:80mm !important; max-width:80mm !important; margin:0 !important; padding:3mm 4mm !important; box-shadow:none !important; border-radius:0 !important; font-size:11pt !important; font-family:'Courier New',Courier,monospace !important; color:#000 !important; background:#fff !important; }
   [data-print-mode="pos"] #receipt-wrapper, [data-print-mode="pos"] #receipt-wrapper * { color:#000 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; background:transparent !important; }
 
   /* A5 mode */
