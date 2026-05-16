@@ -116,8 +116,11 @@
                 <button v-if="lay.sale_id" @click="printLayawayInvoice(lay)" class="p-1.5 text-gray-600 hover:bg-gray-50 rounded" title="Print Invoice">
                   <PrinterIcon class="h-4 w-4" />
                 </button>
-                <button v-if="lay.status === 'active'" @click="confirmCancel(lay)" class="p-1.5 text-red-500 hover:bg-red-50 rounded" title="Cancel">
+                <button v-if="lay.status === 'active'" @click="openCancel(lay)" class="p-1.5 text-red-500 hover:bg-red-50 rounded" title="Cancel Layaway">
                   <XMarkIcon class="h-4 w-4" />
+                </button>
+                <button v-if="lay.status === 'cancelled' && lay.paid_amount > 0" @click="printCancellationSlip(lay)" class="p-1.5 text-gray-500 hover:bg-gray-50 rounded" title="Print Cancellation Slip">
+                  <PrinterIcon class="h-4 w-4" />
                 </button>
               </div>
             </td>
@@ -372,6 +375,126 @@
       </div>
     </teleport>
 
+    <!-- ─── Cancel Layaway Modal ─── -->
+    <teleport to="body">
+      <div v-if="showCancel && cancelTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+          <div class="flex items-center justify-between p-5 border-b border-gray-200">
+            <div>
+              <h2 class="text-lg font-bold text-red-700">Cancel Layaway</h2>
+              <p class="text-sm text-gray-500 mt-0.5">{{ cancelTarget.reference_number }} · {{ cancelTarget.customer?.name }}</p>
+            </div>
+            <button @click="showCancel = false" class="text-gray-400 hover:text-gray-600"><XMarkIcon class="h-5 w-5" /></button>
+          </div>
+
+          <div class="p-5 space-y-4">
+            <!-- Paid amount summary -->
+            <div class="bg-red-50 border border-red-200 rounded-xl p-4 space-y-1.5 text-sm">
+              <div class="flex justify-between">
+                <span class="text-red-700">Item</span>
+                <span class="font-medium text-red-900">{{ cancelTarget.item_description }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-red-700">Total Agreed</span>
+                <span class="font-medium text-red-900">{{ fmtCurrency(cancelTarget.total_amount) }}</span>
+              </div>
+              <div class="flex justify-between border-t border-red-200 pt-1.5 mt-1.5">
+                <span class="text-red-700 font-semibold">Total Paid by Customer</span>
+                <span class="text-lg font-bold text-red-900">{{ fmtCurrency(cancelTarget.paid_amount) }}</span>
+              </div>
+            </div>
+
+            <!-- Refund type -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">Refund Policy <span class="text-red-500">*</span></label>
+              <div class="space-y-2">
+                <label class="flex items-start gap-3 p-3 border rounded-lg cursor-pointer" :class="cancelForm.refund_type === 'full' ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:bg-gray-50'">
+                  <input type="radio" v-model="cancelForm.refund_type" value="full" class="mt-0.5 text-green-600" />
+                  <div>
+                    <p class="text-sm font-medium text-gray-800">Full Refund</p>
+                    <p class="text-xs text-gray-500">Refund 100% of payments collected ({{ fmtCurrency(cancelTarget.paid_amount) }})</p>
+                  </div>
+                </label>
+                <label class="flex items-start gap-3 p-3 border rounded-lg cursor-pointer" :class="cancelForm.refund_type === 'partial' ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'">
+                  <input type="radio" v-model="cancelForm.refund_type" value="partial" class="mt-0.5 text-amber-600" />
+                  <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-800">Partial Refund (Cancellation Fee)</p>
+                    <p class="text-xs text-gray-500">Keep a cancellation fee, refund the rest</p>
+                    <div v-if="cancelForm.refund_type === 'partial'" class="mt-2 flex items-center gap-2">
+                      <span class="text-xs text-gray-600">Fee (LKR)</span>
+                      <input v-model.number="cancelForm.cancellation_fee" type="number" min="0" :max="cancelTarget.paid_amount" step="0.01"
+                        class="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:ring-amber-500 focus:border-amber-500" placeholder="0.00" />
+                    </div>
+                  </div>
+                </label>
+                <label class="flex items-start gap-3 p-3 border rounded-lg cursor-pointer" :class="cancelForm.refund_type === 'forfeit' ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:bg-gray-50'">
+                  <input type="radio" v-model="cancelForm.refund_type" value="forfeit" class="mt-0.5 text-red-600" />
+                  <div>
+                    <p class="text-sm font-medium text-gray-800">Forfeit All</p>
+                    <p class="text-xs text-gray-500">Shop keeps all payments as income — no refund to customer</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Refund method (only if refund > 0) -->
+            <div v-if="cancelRefundAmount > 0" class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Refund Method <span class="text-red-500">*</span></label>
+                <select v-model="cancelForm.refund_method" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-red-500 focus:border-red-500">
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Cancellation Date</label>
+                <input v-model="cancelForm.cancelled_at" type="date" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-red-500 focus:border-red-500" />
+              </div>
+            </div>
+
+            <!-- Reason -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Reason for Cancellation</label>
+              <textarea v-model="cancelForm.cancellation_reason" rows="2" placeholder="Optional note…"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-red-500 focus:border-red-500"></textarea>
+            </div>
+
+            <!-- Refund summary -->
+            <div v-if="cancelForm.refund_type" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm space-y-1">
+              <div class="flex justify-between text-gray-600">
+                <span>Total Paid</span>
+                <span>{{ fmtCurrency(cancelTarget.paid_amount) }}</span>
+              </div>
+              <div class="flex justify-between text-red-600">
+                <span>Cancellation Fee (kept by shop)</span>
+                <span>{{ fmtCurrency(cancelFeeAmount) }}</span>
+              </div>
+              <div class="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-1 mt-1">
+                <span>Refund to Customer</span>
+                <span :class="cancelRefundAmount > 0 ? 'text-green-700' : 'text-gray-500'">{{ fmtCurrency(cancelRefundAmount) }}</span>
+              </div>
+              <div v-if="cancelTarget.paid_amount > 0" class="text-xs text-blue-700 bg-blue-50 rounded p-2 mt-2">
+                <strong>GL:</strong> Dr Customer Deposit (2200) {{ fmtCurrency(cancelTarget.paid_amount) }}
+                <span v-if="cancelRefundAmount > 0"> → Cr Cash/Bank {{ fmtCurrency(cancelRefundAmount) }}</span>
+                <span v-if="cancelFeeAmount > 0"> → Cr Cancellation Fee Income (4050) {{ fmtCurrency(cancelFeeAmount) }}</span>
+              </div>
+            </div>
+
+            <div v-if="cancelError" class="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">{{ cancelError }}</div>
+          </div>
+
+          <div class="flex items-center justify-between p-5 border-t border-gray-200">
+            <button @click="showCancel = false" class="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Keep Layaway</button>
+            <button @click="submitCancel" :disabled="!cancelForm.refund_type || cancelling"
+              class="flex items-center gap-2 px-5 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium">
+              <XMarkIcon class="h-4 w-4" />
+              {{ cancelling ? 'Cancelling…' : 'Confirm Cancellation' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </teleport>
+
     <!-- ─── Convert to Sale / Issue Invoice Modal ─── -->
     <teleport to="body">
       <div v-if="showConvert && convertTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
@@ -498,6 +621,27 @@ const convertTarget = ref(null)
 const converting    = ref(false)
 const convertError  = ref(null)
 const convertForm   = reactive({ payment_method: 'cash', collected_at: today(), notes: '' })
+
+// Cancel modal
+const showCancel    = ref(false)
+const cancelTarget  = ref(null)
+const cancelling    = ref(false)
+const cancelError   = ref(null)
+const cancelForm    = reactive({
+  refund_type: '', cancellation_fee: 0, cancellation_reason: '',
+  refund_method: 'cash', cancelled_at: today(),
+})
+const cancelFeeAmount = computed(() => {
+  if (!cancelTarget.value) return 0
+  if (cancelForm.refund_type === 'full')    return 0
+  if (cancelForm.refund_type === 'forfeit') return cancelTarget.value.paid_amount
+  if (cancelForm.refund_type === 'partial') return Math.min(Number(cancelForm.cancellation_fee) || 0, cancelTarget.value.paid_amount)
+  return 0
+})
+const cancelRefundAmount = computed(() => {
+  if (!cancelTarget.value) return 0
+  return Math.max(0, cancelTarget.value.paid_amount - cancelFeeAmount.value)
+})
 
 // Branding
 const branding = ref({ shop_name: '', logo_url: '' })
@@ -632,13 +776,159 @@ async function submitConvert() {
 }
 
 // ── Cancel ─────────────────────────────────────────────────────────────────
-async function confirmCancel(lay) {
-  if (!confirm(`Cancel layaway ${lay.reference_number}? This cannot be undone.`)) return
-  await axios.post(`/api/layaways/${lay.id}/cancel`)
-  loadLayaways()
-  if (showDetail.value && selectedLayaway.value?.id === lay.id) {
-    selectedLayaway.value.status = 'cancelled'
+function openCancel(lay) {
+  cancelTarget.value = lay
+  cancelError.value  = null
+  Object.assign(cancelForm, {
+    refund_type: lay.paid_amount > 0 ? '' : 'forfeit',
+    cancellation_fee: 0, cancellation_reason: '',
+    refund_method: 'cash', cancelled_at: today(),
+  })
+  showCancel.value = true
+}
+
+async function submitCancel() {
+  cancelError.value = null
+  if (!cancelForm.refund_type) {
+    cancelError.value = 'Please select a refund policy.'
+    return
   }
+  cancelling.value = true
+  try {
+    const payload = {
+      refund_type:         cancelForm.refund_type,
+      cancellation_fee:    cancelFeeAmount.value,
+      cancellation_reason: cancelForm.cancellation_reason,
+      refund_method:       cancelForm.refund_method,
+      cancelled_at:        cancelForm.cancelled_at,
+    }
+    const { data } = await axios.post(`/api/layaways/${cancelTarget.value.id}/cancel`, payload)
+    showCancel.value = false
+    loadLayaways()
+    if (showDetail.value && selectedLayaway.value?.id === cancelTarget.value.id) {
+      selectedLayaway.value = data
+    }
+    printCancellationSlip(data)
+  } catch (e) {
+    cancelError.value = e.response?.data?.message ?? 'Failed to cancel layaway.'
+  } finally {
+    cancelling.value = false
+  }
+}
+
+function printCancellationSlip(lay) {
+  if (!lay.payments) {
+    axios.get(`/api/layaways/${lay.id}`).then(({ data }) => _doCancelPrint(data))
+  } else {
+    _doCancelPrint(lay)
+  }
+}
+
+function _doCancelPrint(layaway) {
+  const shop     = branding.value.shop_name || 'Jewellery Shop'
+  const logoHtml = branding.value.logo_url
+    ? `<img src="${branding.value.logo_url}" alt="logo" style="height:70px;max-width:220px;object-fit:contain">`
+    : ''
+  const customer = layaway.customer ?? {}
+  const payments = layaway.payments ?? []
+
+  const refundTypeLabel = { full: 'Full Refund', partial: 'Partial Refund', forfeit: 'Forfeit All' }[layaway.refund_type] ?? '—'
+  const refundMethodLabel = (layaway.refund_method ?? '').replace('_', ' ')
+
+  const pmtRows = payments.map(p => `
+    <tr>
+      <td>${p.receipt_number}</td>
+      <td>${fmtDate(p.payment_date)}</td>
+      <td style="text-transform:capitalize">${(p.payment_method ?? '').replace('_', ' ')}</td>
+      <td style="text-align:right;font-weight:bold">LKR ${Number(p.amount).toFixed(2)}</td>
+    </tr>`).join('')
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Cancellation Slip ${layaway.reference_number}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;padding:20px}
+  @page{size:A5 landscape;margin:12mm}
+  .cancelled-badge{display:inline-block;background:#fee2e2;color:#991b1b;border:2px solid #fca5a5;border-radius:6px;padding:4px 14px;font-size:15px;font-weight:bold;letter-spacing:1px;margin-bottom:4px}
+  table{width:100%;border-collapse:collapse;margin-top:8px}
+  th{background:#f3f4f6;color:#374151;padding:6px 8px;text-align:left;font-size:11px;border:1px solid #e5e7eb}
+  td{padding:5px 8px;border:1px solid #e5e7eb;font-size:11px}
+  .label{color:#6b7280;font-size:10px}
+  .divider{border-top:1px solid #e5e7eb;margin:10px 0}
+  .summary-box{background:#fef2f2;border:2px solid #fca5a5;border-radius:8px;padding:10px 16px}
+  .refund-box{background:#f0fdf4;border:2px solid #86efac;border-radius:8px;padding:10px 16px}
+</style></head>
+<body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start">
+  <div>${logoHtml}<div style="font-size:18px;font-weight:bold;margin-top:6px">${shop}</div></div>
+  <div style="text-align:right">
+    <div class="cancelled-badge">✗ CANCELLED</div>
+    <div class="label" style="margin-top:6px">Layaway Reference</div>
+    <div style="font-size:15px;font-weight:bold;font-family:monospace;color:#991b1b">${layaway.reference_number}</div>
+    <div class="label" style="margin-top:4px">Cancelled On</div>
+    <div style="font-weight:bold">${layaway.cancelled_at ? fmtDate(layaway.cancelled_at) : fmtDate(new Date())}</div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <div>
+    <div class="label">Customer</div>
+    <div style="font-weight:bold;font-size:13px">${customer.name ?? ''}</div>
+    <div style="color:#6b7280">${customer.phone ?? ''}</div>
+    <div style="color:#6b7280">${customer.email ?? ''}</div>
+  </div>
+  <div>
+    <div class="label">Item Description</div>
+    <div style="font-weight:bold">${layaway.item_description}</div>
+    <div class="label" style="margin-top:4px">Booking Date</div>
+    <div>${fmtDate(layaway.booking_date)}</div>
+    ${layaway.cancellation_reason ? `<div class="label" style="margin-top:4px">Reason</div><div style="color:#6b7280">${layaway.cancellation_reason}</div>` : ''}
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div style="font-weight:bold;margin-bottom:6px;color:#374151">Payment History</div>
+<table>
+  <tr>
+    <th>Receipt No</th><th>Date</th><th>Method</th><th style="text-align:right">Amount</th>
+  </tr>
+  ${pmtRows || '<tr><td colspan="4" style="text-align:center;color:#9ca3af">No payments recorded</td></tr>'}
+</table>
+
+<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <div class="summary-box">
+    <div style="font-size:10px;color:#991b1b;font-weight:bold;margin-bottom:6px">CANCELLATION SUMMARY</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px">
+      <span>Total Agreed</span>
+      <span>LKR ${Number(layaway.total_amount).toFixed(2)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px">
+      <span>Total Paid</span>
+      <span>LKR ${Number(layaway.paid_amount).toFixed(2)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px;color:#991b1b">
+      <span>Cancellation Fee</span>
+      <span>LKR ${Number(layaway.cancellation_fee ?? 0).toFixed(2)}</span>
+    </div>
+    <div style="font-size:10px;color:#6b7280;margin-top:4px">Policy: ${refundTypeLabel}</div>
+  </div>
+  <div class="refund-box">
+    <div style="font-size:10px;color:#166534;font-weight:bold;margin-bottom:6px">REFUND TO CUSTOMER</div>
+    <div style="font-size:22px;font-weight:bold;color:#166534">LKR ${Number(layaway.refund_amount ?? 0).toFixed(2)}</div>
+    ${(layaway.refund_amount ?? 0) > 0 ? `<div style="font-size:10px;color:#374151;margin-top:4px">Via: ${refundMethodLabel}</div>` : '<div style="font-size:10px;color:#6b7280;margin-top:4px">No refund applicable</div>'}
+  </div>
+</div>
+
+<div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:40px">
+  <div style="border-top:1px solid #374151;padding-top:4px;text-align:center;font-size:10px;color:#6b7280">Customer Signature</div>
+  <div style="border-top:1px solid #374151;padding-top:4px;text-align:center;font-size:10px;color:#6b7280">Authorised By</div>
+</div>
+</body></html>`
+
+  popup(html, 900, 620)
 }
 
 // ── Print: Payment Receipt (80mm thermal) ─────────────────────────────────

@@ -35,6 +35,48 @@
       </div>
     </div>
 
+    <!-- Cheque Reminders -->
+    <div v-if="chequeReminders.length" class="card border-l-4 border-l-amber-400 p-0 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 bg-amber-50 border-b border-amber-100">
+        <div class="flex items-center gap-2">
+          <span class="text-amber-500">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+          </span>
+          <h3 class="font-semibold text-amber-800">Cheque Reminders</h3>
+          <span class="ml-1 text-xs font-bold bg-amber-200 text-amber-800 rounded-full px-2 py-0.5">{{ chequeReminders.length }}</span>
+        </div>
+        <router-link to="/purchases" class="text-xs text-amber-600 hover:underline font-medium">View all →</router-link>
+      </div>
+      <div class="divide-y divide-gray-100">
+        <div v-for="c in chequeReminders" :key="c.id"
+          class="flex items-center justify-between px-5 py-3 hover:bg-gray-50"
+          :class="chequeBg(c)">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+              :class="chequeIconBg(c)">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 9.414V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-gray-800">{{ c.purchase_number }}
+                <span class="font-normal text-gray-500 ml-1">· {{ c.supplier?.name }}</span>
+              </p>
+              <p class="text-xs text-gray-500">Cheque #{{ c.cheque_number }} · {{ c.cheque_bank_name }}</p>
+            </div>
+          </div>
+          <div class="text-right shrink-0 ml-4">
+            <p class="text-sm font-bold text-gray-800">LKR {{ Number(c.total).toLocaleString() }}</p>
+            <p class="text-xs font-semibold mt-0.5" :class="chequeDueColor(c)">{{ chequeDueLabel(c) }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- Low stock -->
       <div class="card">
@@ -129,6 +171,40 @@ const chartOptions = {
   responsive: true,
   plugins: { legend: { display: false } },
   scales: { y: { beginAtZero: true } },
+}
+
+const chequeReminders = computed(() => data.value.cheque_reminders ?? [])
+
+function chequeDays(c) {
+  const today = new Date(); today.setHours(0,0,0,0)
+  const due   = new Date(c.cheque_date); due.setHours(0,0,0,0)
+  return Math.round((due - today) / 86400000)
+}
+function chequeDueLabel(c) {
+  const d = chequeDays(c)
+  if (d < 0)  return `Overdue by ${Math.abs(d)} day${Math.abs(d)>1?'s':''}`
+  if (d === 0) return 'Due today!'
+  if (d === 1) return 'Due tomorrow'
+  return `Due in ${d} days  (${c.cheque_date})`
+}
+function chequeDueColor(c) {
+  const d = chequeDays(c)
+  if (d < 0)  return 'text-red-600'
+  if (d <= 1) return 'text-red-500'
+  if (d <= 3) return 'text-amber-600'
+  return 'text-gray-500'
+}
+function chequeBg(c) {
+  const d = chequeDays(c)
+  if (d < 0)  return 'bg-red-50'
+  if (d <= 1) return 'bg-amber-50'
+  return ''
+}
+function chequeIconBg(c) {
+  const d = chequeDays(c)
+  if (d < 0)  return 'bg-red-100 text-red-600'
+  if (d <= 1) return 'bg-amber-100 text-amber-600'
+  return 'bg-gray-100 text-gray-500'
 }
 
 function statusClass(s) {

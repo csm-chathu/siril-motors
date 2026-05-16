@@ -14,15 +14,17 @@ class Purchase extends Model
         'branch_id', 'purchase_number', 'supplier_id', 'user_id', 'subtotal',
         'tax', 'total', 'status', 'payment_method',
         'cheque_number', 'cheque_date', 'cheque_bank_name',
+        'cheque_settled_at', 'settlement_journal_id',
         'notes', 'journal_entry_id', 'purchased_at',
     ];
 
     protected $casts = [
-        'purchased_at' => 'datetime',
-        'cheque_date'  => 'date',
-        'subtotal'     => 'float',
-        'tax'          => 'float',
-        'total'        => 'float',
+        'purchased_at'     => 'datetime',
+        'cheque_date'      => 'date',
+        'cheque_settled_at'=> 'datetime',
+        'subtotal'         => 'float',
+        'tax'              => 'float',
+        'total'            => 'float',
     ];
 
     public function supplier()

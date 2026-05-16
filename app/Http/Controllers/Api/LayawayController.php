@@ -317,17 +317,138 @@ class LayawayController extends Controller
         }
     }
 
-    public function cancel(Layaway $layaway)
+    public function cancel(Request $request, Layaway $layaway)
     {
         if ($layaway->status === 'completed') {
             return response()->json(['message' => 'Cannot cancel a completed layaway.'], 422);
         }
+        if ($layaway->status === 'cancelled') {
+            return response()->json(['message' => 'Layaway is already cancelled.'], 422);
+        }
 
-        $layaway->update(['status' => 'cancelled']);
+        $data = $request->validate([
+            'refund_type'         => 'required|in:full,partial,forfeit',
+            'cancellation_fee'    => 'nullable|numeric|min:0',
+            'cancellation_reason' => 'nullable|string|max:500',
+            'refund_method'       => 'nullable|in:cash,bank_transfer',
+            'cancelled_at'        => 'nullable|date',
+        ]);
 
-        AuditLog::record('layaway_cancelled', "Layaway {$layaway->reference_number} cancelled", $layaway, [], []);
+        $paidAmount = (float) $layaway->paid_amount;
 
-        return response()->json(['message' => 'Layaway cancelled.']);
+        switch ($data['refund_type']) {
+            case 'full':
+                $cancellationFee = 0.0;
+                $refundAmount    = $paidAmount;
+                break;
+            case 'partial':
+                $cancellationFee = min((float) ($data['cancellation_fee'] ?? 0), $paidAmount);
+                $refundAmount    = max(0.0, $paidAmount - $cancellationFee);
+                break;
+            case 'forfeit':
+                $cancellationFee = $paidAmount;
+                $refundAmount    = 0.0;
+                break;
+        }
+
+        DB::beginTransaction();
+        try {
+            $cancelledAt = $data['cancelled_at'] ?? now()->toDateString();
+            $journalId   = null;
+
+            if ($paidAmount > 0) {
+                $journalId = $this->postCancellationJournal(
+                    $layaway, $paidAmount, $refundAmount, $cancellationFee,
+                    $data['refund_method'] ?? 'cash', $cancelledAt
+                );
+            }
+
+            $layaway->update([
+                'status'                  => 'cancelled',
+                'cancelled_at'            => $cancelledAt,
+                'cancellation_reason'     => $data['cancellation_reason'] ?? null,
+                'refund_type'             => $data['refund_type'],
+                'cancellation_fee'        => $cancellationFee,
+                'refund_amount'           => $refundAmount,
+                'refund_method'           => $data['refund_method'] ?? null,
+                'cancellation_journal_id' => $journalId,
+            ]);
+
+            AuditLog::record(
+                'layaway_cancelled',
+                "Layaway {$layaway->reference_number} cancelled. Type: {$data['refund_type']}, Refund: LKR {$refundAmount}, Fee: LKR {$cancellationFee}",
+                $layaway, [], []
+            );
+
+            DB::commit();
+
+            return response()->json($layaway->load(['customer:id,name,phone', 'payments.creator:id,name']));
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Failed to cancel: ' . $e->getMessage()], 500);
+        }
+    }
+
+    private function postCancellationJournal(
+        Layaway $layaway, float $paidAmount, float $refundAmount,
+        float $fee, string $refundMethod, string $date
+    ): ?int {
+        $depositAccount    = Account::where('code', '2200')->first();
+        $cashAccount       = $refundMethod === 'bank_transfer'
+            ? Account::where('code', '1010')->first()
+            : Account::where('code', '1000')->first();
+        $forfeitureAccount = Account::where('code', '4050')->first();
+
+        if (!$depositAccount) {
+            return null;
+        }
+
+        $entrySeq    = JournalEntry::whereDate('created_at', today())->withTrashed()->count() + 1;
+        $entryNumber = 'JE-' . date('Ymd') . '-' . str_pad($entrySeq, 4, '0', STR_PAD_LEFT);
+
+        $entry = JournalEntry::create([
+            'entry_number'   => $entryNumber,
+            'entry_date'     => $date,
+            'description'    => "Layaway cancelled — {$layaway->reference_number}",
+            'reference_type' => 'Layaway',
+            'reference_id'   => $layaway->id,
+            'branch_id'      => $layaway->branch_id,
+            'created_by'     => auth()->id(),
+            'status'         => 'posted',
+        ]);
+
+        // DR Customer Deposit (2200) — clear the liability
+        JournalEntryLine::create([
+            'journal_entry_id' => $entry->id,
+            'account_id'       => $depositAccount->id,
+            'debit'            => $paidAmount,
+            'credit'           => 0,
+            'description'      => "Deposit reversed on cancellation — {$layaway->reference_number}",
+        ]);
+
+        // CR Cash/Bank — refund to customer
+        if ($refundAmount > 0 && $cashAccount) {
+            JournalEntryLine::create([
+                'journal_entry_id' => $entry->id,
+                'account_id'       => $cashAccount->id,
+                'debit'            => 0,
+                'credit'           => $refundAmount,
+                'description'      => "Refund paid to customer — {$layaway->reference_number}",
+            ]);
+        }
+
+        // CR Cancellation Fee Income (4050) — forfeited portion
+        if ($fee > 0 && $forfeitureAccount) {
+            JournalEntryLine::create([
+                'journal_entry_id' => $entry->id,
+                'account_id'       => $forfeitureAccount->id,
+                'debit'            => 0,
+                'credit'           => $fee,
+                'description'      => "Cancellation fee income — {$layaway->reference_number}",
+            ]);
+        }
+
+        return $entry->id;
     }
 
     public function destroy(Layaway $layaway)

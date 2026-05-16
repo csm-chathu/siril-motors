@@ -32,9 +32,17 @@ class PurchaseController extends Controller
         $data = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
             'items'       => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity'   => 'required|integer|min:1',
-            'items.*.unit_cost'  => 'required|numeric|min:0',
+            'items.*.product_id'         => 'nullable|exists:products,id',
+            'items.*.new_product.name'             => 'nullable|required_without:items.*.product_id|string|max:200',
+            'items.*.new_product.category_id'      => 'nullable|required_with:items.*.new_product.name|exists:categories,id',
+            'items.*.new_product.material'         => 'nullable|string|max:50',
+            'items.*.new_product.karat'            => 'nullable|string|max:10',
+            'items.*.new_product.weight'           => 'nullable|numeric|min:0',
+            'items.*.new_product.image_url'        => 'nullable|url|max:1000',
+            'items.*.new_product.image_public_id'  => 'nullable|string|max:255',
+            'items.*.quantity'      => 'required|integer|min:1',
+            'items.*.unit_cost'     => 'required|numeric|min:0',
+            'items.*.selling_price' => 'nullable|numeric|min:0',
             'tax'         => 'nullable|numeric|min:0',
             'status'      => 'required|in:pending,received,partial,cancelled',
             'payment_method'   => 'nullable|in:cash,bank_transfer,cheque,credit',
@@ -66,20 +74,49 @@ class PurchaseController extends Controller
             ]);
 
             foreach ($data['items'] as $item) {
-                $product = Product::findOrFail($item['product_id']);
-                if (!$request->user()->isAdmin() && $product->branch_id !== $request->user()->branch_id) {
-                    throw new \Exception("Product is not available for your branch: {$product->name}");
+                // Create product on-the-fly if no existing product selected
+                if (empty($item['product_id'])) {
+                    $np   = $item['new_product'];
+                    $last = Product::withTrashed()->max('id') ?? 0;
+                    $product = Product::create([
+                        'branch_id'       => $request->user()->branch_id,
+                        'name'            => $np['name'],
+                        'category_id'     => $np['category_id'],
+                        'material'        => $np['material'] ?? null,
+                        'karat'           => $np['karat'] ?? null,
+                        'weight'          => $np['weight'] ?? null,
+                        'supplier_id'     => $data['supplier_id'],
+                        'sku'             => str_pad($last + 1, 6, '0', STR_PAD_LEFT),
+                        'purchase_price'  => $item['unit_cost'],
+                        'selling_price'   => $item['selling_price'] ?? 0,
+                        'stock_quantity'  => 0,
+                        'min_stock_level' => 1,
+                        'is_active'       => true,
+                        'image'           => $np['image_url'] ?? null,
+                        'image_public_id' => $np['image_public_id'] ?? null,
+                    ]);
+                } else {
+                    $product = Product::findOrFail($item['product_id']);
+                    if (!$request->user()->isAdmin() && $product->branch_id !== $request->user()->branch_id) {
+                        throw new \Exception("Product not available for your branch: {$product->name}");
+                    }
                 }
 
                 PurchaseItem::create([
-                    'purchase_id' => $purchase->id,
-                    'product_id'  => $item['product_id'],
-                    'quantity'    => $item['quantity'],
-                    'unit_cost'   => $item['unit_cost'],
-                    'total'       => $item['unit_cost'] * $item['quantity'],
+                    'purchase_id'   => $purchase->id,
+                    'product_id'    => $product->id,
+                    'quantity'      => $item['quantity'],
+                    'unit_cost'     => $item['unit_cost'],
+                    'selling_price' => $item['selling_price'] ?? 0,
+                    'total'         => $item['unit_cost'] * $item['quantity'],
                 ]);
                 if ($data['status'] === 'received') {
                     $product->increment('stock_quantity', $item['quantity']);
+                    $updates = ['purchase_price' => $item['unit_cost']];
+                    if (!empty($item['selling_price'])) {
+                        $updates['selling_price'] = $item['selling_price'];
+                    }
+                    $product->update($updates);
                 }
             }
 
@@ -102,6 +139,69 @@ class PurchaseController extends Controller
     {
         $this->authorizeBranch($purchase->branch_id);
         return response()->json($purchase->load(['items.product', 'supplier', 'user']));
+    }
+
+    public function receive(Request $request, Purchase $purchase)
+    {
+        $this->authorizeBranch($purchase->branch_id);
+
+        if ($purchase->status === 'received') {
+            return response()->json(['message' => 'Purchase already received.'], 422);
+        }
+
+        $data = $request->validate([
+            'items'                 => 'required|array|min:1',
+            'items.*.id'            => 'required|exists:purchase_items,id',
+            'items.*.quantity'      => 'required|integer|min:0',
+            'items.*.unit_cost'     => 'required|numeric|min:0',
+            'items.*.selling_price' => 'nullable|numeric|min:0',
+            'notes'                 => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $subtotal = 0;
+            foreach ($data['items'] as $row) {
+                $item    = PurchaseItem::findOrFail($row['id']);
+                $product = Product::findOrFail($item->product_id);
+
+                $item->update([
+                    'quantity'      => $row['quantity'],
+                    'unit_cost'     => $row['unit_cost'],
+                    'selling_price' => $row['selling_price'] ?? $item->selling_price,
+                    'total'         => $row['unit_cost'] * $row['quantity'],
+                ]);
+
+                $subtotal += $item->total;
+
+                if ($row['quantity'] > 0) {
+                    $product->increment('stock_quantity', $row['quantity']);
+                    $updates = ['purchase_price' => $row['unit_cost']];
+                    if (!empty($row['selling_price'])) {
+                        $updates['selling_price'] = $row['selling_price'];
+                    }
+                    $product->update($updates);
+                }
+            }
+
+            $purchase->update([
+                'status'   => 'received',
+                'subtotal' => $subtotal,
+                'total'    => $subtotal + $purchase->tax,
+                'notes'    => $data['notes'] ?? $purchase->notes,
+            ]);
+
+            $entry = $this->postPurchaseJournal($purchase->fresh());
+            $purchase->update(['journal_entry_id' => $entry->id]);
+
+            AuditLog::record('purchase_received', "GRN received for {$purchase->purchase_number}", $purchase);
+
+            DB::commit();
+            return response()->json($purchase->load(['items.product', 'supplier', 'user']));
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     public function destroy(Purchase $purchase)
@@ -133,7 +233,7 @@ class PurchaseController extends Controller
             throw new \Exception('Accounts payable account (2000) not found for credit purchase.');
         }
 
-        if ($purchase->payment_method !== 'credit' && !$paymentAccount) {
+        if ($purchase->payment_method !== 'credit' && $purchase->payment_method !== 'cheque' && !$paymentAccount) {
             throw new \Exception('Payment account not found for purchase payment method.');
         }
 
@@ -167,14 +267,88 @@ class PurchaseController extends Controller
         return $entry;
     }
 
+    public function settleChequePurchase(Request $request, Purchase $purchase)
+    {
+        $this->authorizeBranch($purchase->branch_id);
+
+        if ($purchase->payment_method !== 'cheque') {
+            return response()->json(['message' => 'This purchase is not a cheque payment.'], 422);
+        }
+        if ($purchase->cheque_settled_at) {
+            return response()->json(['message' => 'Cheque already settled.'], 422);
+        }
+
+        $data = $request->validate([
+            'settled_date' => 'nullable|date',
+            'notes'        => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $chequesPayable = Account::where('code', '2050')->first();
+            $bank           = Account::where('code', '1010')->first();
+
+            if (!$chequesPayable || !$bank) {
+                throw new \Exception('Cheques Payable (2050) or Bank Account (1010) not found.');
+            }
+
+            $settledAt = isset($data['settled_date']) ? $data['settled_date'] : now();
+
+            $entry = JournalEntry::create([
+                'entry_number'   => $this->nextEntryNumber(),
+                'entry_date'     => $settledAt,
+                'description'    => "Cheque settled – {$purchase->purchase_number} (#{$purchase->cheque_number}, {$purchase->cheque_bank_name})",
+                'reference_type' => 'Purchase',
+                'reference_id'   => $purchase->id,
+                'branch_id'      => $purchase->branch_id,
+                'created_by'     => auth()->id(),
+                'status'         => 'posted',
+            ]);
+
+            JournalEntryLine::create([
+                'journal_entry_id' => $entry->id,
+                'account_id'       => $chequesPayable->id,
+                'debit'            => $purchase->total,
+                'credit'           => 0,
+                'description'      => "Cheque payable cleared – {$purchase->purchase_number}",
+            ]);
+
+            JournalEntryLine::create([
+                'journal_entry_id' => $entry->id,
+                'account_id'       => $bank->id,
+                'debit'            => 0,
+                'credit'           => $purchase->total,
+                'description'      => "Bank payment – cheque #{$purchase->cheque_number}",
+            ]);
+
+            $purchase->update([
+                'cheque_settled_at'    => $settledAt,
+                'settlement_journal_id'=> $entry->id,
+            ]);
+
+            AuditLog::record('cheque_settled', "Cheque settled for {$purchase->purchase_number}", $purchase);
+
+            DB::commit();
+            return response()->json($purchase->fresh());
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
     private function paymentAccountByMethod(string $method): ?Account
     {
         if ($method === 'cash') {
             return Account::where('code', '1000')->first();
         }
 
-        if (in_array($method, ['bank_transfer', 'cheque'])) {
+        if ($method === 'bank_transfer') {
             return Account::where('code', '1010')->first();
+        }
+
+        // Cheques go to Cheques Payable (2050); settled separately via settleChequePurchase
+        if ($method === 'cheque') {
+            return Account::where('code', '2050')->first();
         }
 
         return null;

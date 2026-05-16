@@ -66,6 +66,13 @@ class DashboardController extends Controller
                 ->latest('sold_at')
                 ->take(5)
                 ->get(['id', 'invoice_number', 'customer_id', 'total', 'payment_status', 'sold_at']),
+            'cheque_reminders' => (clone $purchasesQuery)
+                ->with('supplier:id,name')
+                ->where('payment_method', 'cheque')
+                ->whereNull('cheque_settled_at')
+                ->whereNotNull('cheque_date')
+                ->orderBy('cheque_date')
+                ->get(['id', 'purchase_number', 'supplier_id', 'total', 'cheque_number', 'cheque_date', 'cheque_bank_name', 'status']),
         ];
 
         return response()->json($data);

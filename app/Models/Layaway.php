@@ -15,15 +15,20 @@ class Layaway extends Model
         'total_amount', 'paid_amount', 'balance_amount', 'status',
         'booking_date', 'expected_by', 'notes', 'branch_id', 'created_by',
         'sale_id', 'collected_at',
+        'cancelled_at', 'cancellation_reason', 'refund_type',
+        'cancellation_fee', 'refund_amount', 'refund_method', 'cancellation_journal_id',
     ];
 
     protected $casts = [
-        'booking_date'  => 'date',
-        'expected_by'   => 'date',
-        'collected_at'  => 'datetime',
-        'total_amount'  => 'float',
-        'paid_amount'   => 'float',
-        'balance_amount' => 'float',
+        'booking_date'      => 'date',
+        'expected_by'       => 'date',
+        'collected_at'      => 'datetime',
+        'cancelled_at'      => 'datetime',
+        'total_amount'      => 'float',
+        'paid_amount'       => 'float',
+        'balance_amount'    => 'float',
+        'cancellation_fee'  => 'float',
+        'refund_amount'     => 'float',
     ];
 
     protected static function booted(): void

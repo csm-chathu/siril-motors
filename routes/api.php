@@ -66,6 +66,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/sales/{sale}/settle-booking', [SaleController::class, 'settleBooking']);
     Route::post('/sales/{sale}/send-sms',       [SaleController::class, 'sendSms']);
     Route::apiResource('purchases',  PurchaseController::class)->except(['update']);
+    Route::post('purchases/{purchase}/receive',      [PurchaseController::class, 'receive']);
+    Route::post('purchases/{purchase}/settle-cheque',[PurchaseController::class, 'settleChequePurchase']);
 
     // Gold rates
     Route::get('/gold-rates',            [GoldRateController::class, 'index']);
