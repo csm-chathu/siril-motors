@@ -4,7 +4,7 @@
 
 @layer components {
     .btn-primary {
-        @apply bg-gold-600 hover:bg-gold-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50;
+        @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50;
     }
 
     .btn-secondary {
@@ -20,7 +20,7 @@
     }
 
     .form-input {
-        @apply block w-full rounded-lg border-gray-300 shadow-sm focus:ring-gold-500 focus:border-gold-500 text-sm;
+        @apply block w-full rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm;
     }
 
     .form-label {

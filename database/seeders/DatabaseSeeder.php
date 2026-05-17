@@ -27,81 +27,121 @@ class DatabaseSeeder extends Seeder
         );
 
         User::updateOrCreate(
-            ['email' => 'admin@jewellery.com'],
+            ['email' => 'admin@siril-motors.com'],
             [
-                'name'      => 'Admin',
+                'name'      => 'Admin User',
                 'password'  => Hash::make('password'),
                 'role'      => 'admin',
                 'branch_id' => $mainBranch->id,
+                
+                'can_delete_transactions' => true,
             ]
         );
 
         User::updateOrCreate(
-            ['email' => 'branch@jewellery.com'],
+            ['email' => 'manager@siril-motors.com'],
             [
-                'name'      => 'Main Branch User',
+                'name'      => 'Manager User',
                 'password'  => Hash::make('password'),
-                'role'      => 'branch',
+                'role'      => 'manager',
+                'branch_id' => $mainBranch->id,
+                
+                'can_delete_transactions' => false,
+            ]
+        );
+
+        User::updateOrCreate(
+            ['email' => 'staff@siril-motors.com'],
+            [
+                'name'      => 'Staff User',
+                'password'  => Hash::make('password'),
+                'role'      => 'staff',
                 'branch_id' => $downtownBranch->id,
+                
+                'can_delete_transactions' => false,
             ]
         );
 
         $this->call(CaratSeeder::class);
+        $this->call(SparePartsStructureSeeder::class);
 
         $categories = [
-            ['name' => 'Rings',     'slug' => 'rings'],
-            ['name' => 'Necklaces', 'slug' => 'necklaces'],
-            ['name' => 'Bracelets', 'slug' => 'bracelets'],
-            ['name' => 'Earrings',  'slug' => 'earrings'],
-            ['name' => 'Bangles',   'slug' => 'bangles'],
-            ['name' => 'Pendants',  'slug' => 'pendants'],
-            ['name' => 'Chains',    'slug' => 'chains'],
-            ['name' => 'Anklets',   'slug' => 'anklets'],
+            ['name' => 'Engine Parts',      'slug' => 'engine-parts'],
+            ['name' => 'Suspension',        'slug' => 'suspension'],
+            ['name' => 'Brakes',            'slug' => 'brakes'],
+            ['name' => 'Electrical',        'slug' => 'electrical'],
+            ['name' => 'Transmission',      'slug' => 'transmission'],
+            ['name' => 'Cooling System',    'slug' => 'cooling-system'],
+            ['name' => 'Fuel System',       'slug' => 'fuel-system'],
+            ['name' => 'Lights & Wipers',   'slug' => 'lights-wipers'],
+            ['name' => 'Filters',           'slug' => 'filters'],
+            ['name' => 'Belts & Hoses',     'slug' => 'belts-hoses'],
         ];
         foreach ($categories as $cat) {
             Category::firstOrCreate(
                 ['slug' => $cat['slug'], 'branch_id' => $mainBranch->id],
-                array_merge($cat, ['is_active' => true, 'branch_id' => $mainBranch->id])
+                array_merge($cat, [ 'branch_id' => $mainBranch->id])
             );
         }
 
         $suppliers = [
-            ['name' => 'Gold Masters Ltd',    'email' => 'info@goldmasters.com',    'phone' => '+1-800-111-2222', 'city' => 'New York',    'country' => 'USA'],
-            ['name' => 'Silver Craft Co.',    'email' => 'orders@silvercraft.com',  'phone' => '+44-20-1234-5678','city' => 'London',      'country' => 'UK'],
-            ['name' => 'Diamond Hub',         'email' => 'contact@diamondhub.com',  'phone' => '+91-98765-43210', 'city' => 'Mumbai',      'country' => 'India'],
-            ['name' => 'Precious Stone Inc.', 'email' => 'sales@preciousstone.com', 'phone' => '+1-888-333-4444', 'city' => 'Los Angeles', 'country' => 'USA'],
+            ['name' => 'Auto Parts Direct',      'email' => 'info@autopartsdirect.com',      'phone' => '+1-800-AUTO-001', 'city' => 'Detroit',      'country' => 'USA'],
+            ['name' => 'Genuine Motors Ltd',     'email' => 'sales@genuinemotors.com',       'phone' => '+44-121-AUTO-002','city' => 'Birmingham',    'country' => 'UK'],
+            ['name' => 'Asia Auto Supplies',     'email' => 'contact@asiaauto.com',          'phone' => '+81-3-AUTO-003',  'city' => 'Tokyo',        'country' => 'Japan'],
+            ['name' => 'European Auto Parts Co.','email' => 'orders@euroaparts.com',         'phone' => '+49-30-AUTO-004', 'city' => 'Berlin',       'country' => 'Germany'],
+            ['name' => 'Global Vehicle Parts',   'email' => 'support@globalvehicle.com',     'phone' => '+91-22-AUTO-005', 'city' => 'Mumbai',       'country' => 'India'],
         ];
         foreach ($suppliers as $sup) {
             Supplier::updateOrCreate(
                 ['email' => $sup['email']],
-                array_merge($sup, ['is_active' => true, 'branch_id' => $mainBranch->id])
+                array_merge($sup, [ 'branch_id' => $mainBranch->id])
             );
         }
 
         $categoryIds = Category::pluck('id')->toArray();
         $supplierIds = Supplier::pluck('id')->toArray();
-        $materials   = ['Gold', 'Silver', 'Platinum', 'White Gold', 'Rose Gold'];
-        $karats      = ['18k', '22k', '24k', '14k'];
-        $gemstones   = ['Diamond', 'Ruby', 'Emerald', 'Sapphire', 'Pearl', null];
+        
+        $spareParts = [
+            // Engine Parts
+            ['name' => 'Engine Oil Filter', 'category' => 'Engine Parts', 'price' => 25],
+            ['name' => 'Air Filter', 'category' => 'Engine Parts', 'price' => 35],
+            ['name' => 'Spark Plugs (Set of 4)', 'category' => 'Engine Parts', 'price' => 45],
+            ['name' => 'Alternator', 'category' => 'Engine Parts', 'price' => 250],
+            ['name' => 'Starter Motor', 'category' => 'Engine Parts', 'price' => 180],
+            // Suspension
+            ['name' => 'Front Shock Absorber', 'category' => 'Suspension', 'price' => 120],
+            ['name' => 'Rear Shock Absorber', 'category' => 'Suspension', 'price' => 110],
+            ['name' => 'Brake Pads (Front)', 'category' => 'Brakes', 'price' => 85],
+            ['name' => 'Brake Pads (Rear)', 'category' => 'Brakes', 'price' => 75],
+            ['name' => 'Brake Disc', 'category' => 'Brakes', 'price' => 145],
+            // Electrical
+            ['name' => 'Car Battery 12V 60Ah', 'category' => 'Electrical', 'price' => 95],
+            ['name' => 'Headlight Bulb (H7)', 'category' => 'Lights & Wipers', 'price' => 22],
+            ['name' => 'Tail Light Bulb', 'category' => 'Lights & Wipers', 'price' => 18],
+            ['name' => 'Windshield Wiper Blade', 'category' => 'Lights & Wipers', 'price' => 28],
+            // Transmission
+            ['name' => 'Transmission Fluid (5L)', 'category' => 'Transmission', 'price' => 65],
+            ['name' => 'Clutch Plate', 'category' => 'Transmission', 'price' => 160],
+            ['name' => 'Clutch Release Bearing', 'category' => 'Transmission', 'price' => 85],
+            // Cooling System
+            ['name' => 'Radiator', 'category' => 'Cooling System', 'price' => 280],
+            ['name' => 'Water Pump', 'category' => 'Cooling System', 'price' => 195],
+            ['name' => 'Thermostat', 'category' => 'Cooling System', 'price' => 55],
+            // Fuel System
+            ['name' => 'Fuel Filter', 'category' => 'Fuel System', 'price' => 35],
+            ['name' => 'Fuel Pump', 'category' => 'Fuel System', 'price' => 220],
+            ['name' => 'Fuel Injector', 'category' => 'Fuel System', 'price' => 140],
+            // Filters
+            ['name' => 'Cabin Air Filter', 'category' => 'Filters', 'price' => 40],
+            ['name' => 'Diesel Fuel Filter', 'category' => 'Filters', 'price' => 50],
+            // Belts & Hoses
+            ['name' => 'Serpentine Belt', 'category' => 'Belts & Hoses', 'price' => 65],
+            ['name' => 'Coolant Hose', 'category' => 'Belts & Hoses', 'price' => 45],
+            ['name' => 'Power Steering Hose', 'category' => 'Belts & Hoses', 'price' => 85],
+        ];
 
-        for ($i = 1; $i <= 30; $i++) {
-            Product::create([
-                'sku'             => 'JEW-' . strtoupper(Str::random(8)),
-                'name'            => $materials[array_rand($materials)] . ' ' . ['Ring', 'Necklace', 'Bracelet', 'Earring'][array_rand(['a','b','c','d'])],
-                'category_id'     => $categoryIds[array_rand($categoryIds)],
-                'material'        => $materials[array_rand($materials)],
-                'karat'           => $karats[array_rand($karats)],
-                'gemstone'        => $gemstones[array_rand($gemstones)],
-                'weight'          => round(mt_rand(10, 100) / 10, 1),
-                'purchase_price'  => mt_rand(500, 10000),
-                'selling_price'   => mt_rand(1000, 25000),
-                'stock_quantity'  => mt_rand(2, 50),
-                'min_stock_level' => 5,
-                'supplier_id'     => $supplierIds[array_rand($supplierIds)],
-                'is_active'       => true,
-                'branch_id'       => $mainBranch->id,
-            ]);
-        }
+        $sparePartsData = [];
+        // Legacy product seeding removed. All products are now seeded via SparePartsStructureSeeder.
 
         $customers = [
             ['name' => 'Alice Johnson',  'email' => 'alice@example.com',  'phone' => '+1-555-001'],
@@ -113,8 +153,14 @@ class DatabaseSeeder extends Seeder
         foreach ($customers as $cust) {
             Customer::updateOrCreate(
                 ['email' => $cust['email']],
-                array_merge($cust, ['branch_id' => $mainBranch->id])
+                [
+                    'name' => $cust['name'],
+                    'phone' => $cust['phone'],
+                    'branch_id' => $mainBranch->id,
+                    
+                ]
             );
+
         }
     }
 }

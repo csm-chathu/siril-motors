@@ -15,13 +15,14 @@ class Purchase extends Model
         'tax', 'total', 'status', 'payment_method',
         'cheque_number', 'cheque_date', 'cheque_bank_name',
         'cheque_settled_at', 'settlement_journal_id',
-        'notes', 'journal_entry_id', 'purchased_at',
+        'notes', 'supplier_ref', 'expected_delivery', 'journal_entry_id', 'purchased_at',
     ];
 
     protected $casts = [
-        'purchased_at'     => 'datetime',
-        'cheque_date'      => 'date',
-        'cheque_settled_at'=> 'datetime',
+        'purchased_at'      => 'datetime',
+        'cheque_date'       => 'date',
+        'cheque_settled_at' => 'datetime',
+        'expected_delivery' => 'date',
         'subtotal'         => 'float',
         'tax'              => 'float',
         'total'            => 'float',

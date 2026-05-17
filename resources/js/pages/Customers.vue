@@ -11,7 +11,7 @@
       <table class="w-full">
         <thead class="bg-gray-50 border-b"><tr>
           <th class="table-th">Name</th><th class="table-th">Email</th>
-          <th class="table-th">Phone</th><th class="table-th">City</th>
+          <th class="table-th">Phone</th><th class="table-th">Vehicle No.</th><th class="table-th">City</th>
           <th class="table-th">KYC</th><th class="table-th">Sales</th><th class="table-th">Actions</th>
         </tr></thead>
         <tbody class="divide-y divide-gray-100">
@@ -19,6 +19,10 @@
             <td class="table-td font-medium">{{ c.name }}</td>
             <td class="table-td text-gray-500">{{ c.email }}</td>
             <td class="table-td">{{ c.phone }}</td>
+            <td class="table-td">
+              <span v-if="c.vehicle_number" class="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{{ c.vehicle_number }}</span>
+              <span v-else class="text-gray-300 text-xs">—</span>
+            </td>
             <td class="table-td">{{ c.city }}</td>
             <td class="table-td">
               <span v-if="c.kyc_verified" class="badge bg-green-100 text-green-700 text-xs">✓ Verified</span>
@@ -35,7 +39,7 @@
             </button>
             </div></td>
           </tr>
-          <tr v-if="!customers.data?.length"><td colspan="6" class="table-td text-center text-gray-400 py-8">No customers</td></tr>
+          <tr v-if="!customers.data?.length"><td colspan="8" class="table-td text-center text-gray-400 py-8">No customers</td></tr>
         </tbody>
       </table>
       <div class="px-4 py-3 border-t flex justify-between text-sm text-gray-600">
@@ -107,6 +111,11 @@
                       <option value="other">Other</option>
                     </select>
                   </div>
+                </div>
+
+                <div>
+                  <label class="form-label">Vehicle Number</label>
+                  <input v-model="form.vehicle_number" class="form-input font-mono uppercase" placeholder="e.g. CAB-1234" />
                 </div>
 
                 <div>
@@ -206,7 +215,7 @@ const customers = ref({ data: [] })
 const search    = ref(''); const page = ref(1)
 const showModal = ref(false); const editing = ref(null)
 const saving    = ref(false); const error   = ref('')
-const form      = reactive({ name:'',email:'',phone:'',address:'',city:'',country:'',date_of_birth:'',gender:'',notes:'', id_type:'',id_number:'',id_expiry:'',kyc_verified:false,kyc_notes:'' })
+const form      = reactive({ name:'',email:'',phone:'',vehicle_number:'',address:'',city:'',country:'',date_of_birth:'',gender:'',notes:'', id_type:'',id_number:'',id_expiry:'',kyc_verified:false,kyc_notes:'' })
 
 let debounceTimer = null
 function debouncedFetch() { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => { page.value=1; fetch() }, 400) }
@@ -216,7 +225,7 @@ async function fetch() {
   customers.value = data
 }
 
-function openCreate() { editing.value=null; Object.assign(form,{name:'',email:'',phone:'',address:'',city:'',country:'',date_of_birth:'',gender:'',notes:'',id_type:'',id_number:'',id_expiry:'',kyc_verified:false,kyc_notes:''}); showModal.value=true }
+function openCreate() { editing.value=null; Object.assign(form,{name:'',email:'',phone:'',vehicle_number:'',address:'',city:'',country:'',date_of_birth:'',gender:'',notes:'',id_type:'',id_number:'',id_expiry:'',kyc_verified:false,kyc_notes:''}); showModal.value=true }
 function openEdit(c)  { editing.value=c; Object.assign(form,c); showModal.value=true }
 
 async function save() {

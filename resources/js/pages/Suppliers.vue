@@ -54,7 +54,7 @@
           <div><label class="form-label">Country</label><input v-model="form.country" class="form-input" /></div>
           <div class="col-span-2"><label class="form-label">Address</label><textarea v-model="form.address" rows="2" class="form-input"></textarea></div>
           <div class="col-span-2"><label class="form-label">Notes</label><textarea v-model="form.notes" rows="2" class="form-input"></textarea></div>
-          <div class="col-span-2"><label class="flex items-center gap-2 text-sm"><input type="checkbox" v-model="form.is_active" class="rounded text-gold-600" /> Active</label></div>
+          <div class="col-span-2"><label class="flex items-center gap-2 text-sm"><input type="checkbox" v-model="form.is_active" class="rounded text-blue-600" /> Active</label></div>
         </div>
         <p v-if="error" class="text-sm text-red-600 mt-2">{{ error }}</p>
         <div class="flex justify-end gap-3 mt-5">

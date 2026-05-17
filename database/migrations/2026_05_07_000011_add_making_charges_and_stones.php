@@ -8,32 +8,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('products', function (Blueprint $table) {
-            // Making charges
-            $table->enum('making_charge_type', ['per_gram', 'per_piece', 'percentage'])->default('per_gram')->after('karat');
-            $table->decimal('making_charge', 10, 2)->default(0)->after('making_charge_type');
-            $table->decimal('wastage_percent', 5, 2)->default(0)->after('making_charge');
-            // Gemstone fields
-            $table->decimal('gemstone_weight', 8, 3)->nullable()->after('wastage_percent');
-            $table->decimal('gemstone_value', 12, 2)->default(0)->after('gemstone_weight');
-            $table->string('gemstone_quality')->nullable()->after('gemstone_value'); // e.g. "VS1", "SI2"
-        });
-
-        Schema::table('sale_items', function (Blueprint $table) {
-            $table->decimal('gold_value', 12, 2)->default(0)->after('total');
-            $table->decimal('gemstone_value', 12, 2)->default(0)->after('gold_value');
-            $table->decimal('making_charge', 12, 2)->default(0)->after('gemstone_value');
-            $table->decimal('wastage_amount', 12, 2)->default(0)->after('making_charge');
-        });
-
-        Schema::table('sales', function (Blueprint $table) {
-            $table->decimal('gold_value_total', 14, 2)->default(0)->after('tax');
-            $table->decimal('gemstone_value_total', 14, 2)->default(0)->after('gold_value_total');
-            $table->decimal('making_charges_total', 14, 2)->default(0)->after('gemstone_value_total');
-            $table->decimal('wastage_total', 14, 2)->default(0)->after('making_charges_total');
-            $table->decimal('tax_rate', 5, 2)->default(0)->after('wastage_total'); // applied tax %
-            $table->string('sold_at')->nullable()->change();
-        });
+        // This migration previously added gold/jewelry-specific columns. For spare parts, these are not needed.
+        // If you need to add spare part-specific columns, do so here. Otherwise, leave this migration empty or remove it.
+        // Example: Add a 'warranty_period' column to products if needed.
+        // Schema::table('products', function (Blueprint $table) {
+        //     $table->integer('warranty_period_months')->nullable()->after('price');
+        // });
+        // No changes needed for sale_items or sales tables for spare parts context.
     }
 
     public function down(): void

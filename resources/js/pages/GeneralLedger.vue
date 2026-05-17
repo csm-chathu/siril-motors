@@ -270,12 +270,8 @@
       <div class="flex items-center gap-4">
         <div class="flex-1 max-w-sm">
           <label class="form-label">Select Account</label>
-          <select v-model="ledgerAccountId" class="form-input" @change="loadTab">
-            <option value="">— Choose an account —</option>
-            <optgroup v-for="grp in accountGroups" :key="grp.type" :label="grp.label">
-              <option v-for="a in grp.items" :key="a.id" :value="a.id">{{ a.code }} – {{ a.name }}</option>
-            </optgroup>
-          </select>
+          <SearchableSelect v-model="ledgerAccountId" :options="flatAccounts"
+            placeholder="— Choose an account —" @update:modelValue="loadTab" />
         </div>
       </div>
 
@@ -352,6 +348,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { fmtDate as _fmtDate } from '../utils/date.js'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 import {
   ArrowPathIcon, BanknotesIcon, ScaleIcon, BuildingLibraryIcon,
   ArrowTrendingUpIcon, ReceiptPercentIcon,
@@ -386,6 +383,10 @@ const accountGroups = computed(() =>
     label: typeLabel[type],
     items: allAccounts.value.filter(a => a.type === type),
   })).filter(g => g.items.length)
+)
+
+const flatAccounts = computed(() =>
+  allAccounts.value.map(a => ({ id: a.id, name: a.name, sub: a.code }))
 )
 
 const isTrialBalanced = computed(() =>

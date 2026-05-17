@@ -2,51 +2,29 @@
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-xl font-semibold text-gray-800">Day-End Reconciliation</h2>
-        <p class="text-sm text-gray-500 mt-0.5">Match physical stock weight against system records</p>
+        <h2 class="text-xl font-semibold text-gray-800">Day-End Stock Reconciliation</h2>
+        <p class="text-sm text-gray-500 mt-0.5">Match physical stock quantities against system records</p>
       </div>
       <input v-model="reportDate" type="date" class="form-input w-48" @change="load" />
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" v-if="dayData">
-      <!-- Left: system stock summary -->
+      <!-- Left: item-by-item count -->
       <div class="lg:col-span-2 space-y-4">
-        <!-- Karat breakdown -->
-        <div class="card space-y-3">
-          <h3 class="font-semibold text-gray-700 flex items-center gap-2">
-            System Stock — {{ reportDate }}
-            <span v-if="dayData.gold_rate" class="text-xs font-normal text-gold-600">
-              (Rate: LKR {{ lkr(dayData.gold_rate.rate_per_gram) }}/g 24K)
-            </span>
-          </h3>
-          <div class="grid grid-cols-3 gap-3">
-            <div v-for="k in dayData.karat_breakdown" :key="k.karat"
-              class="bg-gold-50 border border-gold-200 rounded-xl p-3 text-center">
-              <p class="text-xs font-semibold text-gold-600 uppercase">{{ k.karat }}</p>
-              <p class="text-lg font-bold text-gold-800">{{ k.weight_g }}g</p>
-              <p class="text-xs text-gray-500">{{ k.pieces }} pieces</p>
-            </div>
+
+        <!-- Summary stats -->
+        <div class="grid grid-cols-3 gap-3">
+          <div class="card text-center py-3">
+            <p class="text-xs text-gray-500">Total SKUs</p>
+            <p class="text-2xl font-bold text-gray-800">{{ dayData.products.length }}</p>
           </div>
-          <div class="border-t pt-3 flex gap-6 text-sm">
-            <div>
-              <p class="text-gray-500 text-xs">Total System Weight</p>
-              <p class="font-bold text-gray-800">{{ totalSystemWeight.toFixed(3) }}g</p>
-            </div>
-            <div>
-              <p class="text-gray-500 text-xs">Physical Count</p>
-              <div class="flex items-center gap-2">
-                <input v-model.number="physicalWeight" type="number" min="0" step="0.001"
-                  class="form-input w-28 py-1" placeholder="0.000" />
-                <span class="text-xs text-gray-400">g</span>
-              </div>
-            </div>
-            <div v-if="physicalWeight !== ''">
-              <p class="text-gray-500 text-xs">Variance</p>
-              <p class="font-bold text-lg"
-                :class="variance === 0 ? 'text-green-600' : variance > 0 ? 'text-blue-600' : 'text-red-600'">
-                {{ variance >= 0 ? '+' : '' }}{{ variance.toFixed(3) }}g
-              </p>
-            </div>
+          <div class="card text-center py-3">
+            <p class="text-xs text-gray-500">Items with Variance</p>
+            <p class="text-2xl font-bold" :class="varianceCount > 0 ? 'text-red-600' : 'text-green-600'">{{ varianceCount }}</p>
+          </div>
+          <div class="card text-center py-3">
+            <p class="text-xs text-gray-500">Low Stock Items</p>
+            <p class="text-2xl font-bold text-amber-600">{{ dayData.low_stock_count ?? 0 }}</p>
           </div>
         </div>
 
@@ -54,16 +32,16 @@
         <div class="card p-0 overflow-hidden">
           <div class="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
             <h3 class="font-semibold text-gray-700">Item-by-Item Count</h3>
-            <span class="text-xs text-gray-400">Enter physical quantity for each item</span>
+            <span class="text-xs text-gray-400">Enter physical quantity for each part</span>
           </div>
-          <div class="max-h-96 overflow-y-auto">
+          <div class="max-h-[480px] overflow-y-auto">
             <table class="w-full">
               <thead class="bg-gray-50 border-b sticky top-0">
                 <tr>
                   <th class="table-th">SKU</th>
-                  <th class="table-th">Product</th>
-                  <th class="table-th">Karat</th>
-                  <th class="table-th">Weight/pc</th>
+                  <th class="table-th">Part Name</th>
+                  <th class="table-th">Category</th>
+                  <th class="table-th">Rack</th>
                   <th class="table-th">System Qty</th>
                   <th class="table-th">Physical Qty</th>
                   <th class="table-th">Variance</th>
@@ -74,8 +52,8 @@
                   :class="getItemVariance(p) !== 0 ? 'bg-red-50' : 'hover:bg-gray-50'">
                   <td class="table-td font-mono text-xs text-gray-500">{{ p.sku }}</td>
                   <td class="table-td text-sm font-medium">{{ p.name }}</td>
-                  <td class="table-td text-gold-700 uppercase text-sm">{{ p.karat ?? '—' }}</td>
-                  <td class="table-td text-sm font-mono">{{ p.weight ? p.weight + 'g' : '—' }}</td>
+                  <td class="table-td text-xs text-gray-500">{{ p.part_category?.name ?? '—' }}</td>
+                  <td class="table-td text-xs font-mono text-gray-400">{{ p.rack_location ?? '—' }}</td>
                   <td class="table-td">
                     <span class="badge bg-blue-100 text-blue-700">{{ p.stock_quantity }}</span>
                   </td>
@@ -105,17 +83,17 @@
           <h3 class="font-semibold text-gray-700">Submit Report</h3>
           <div class="space-y-1 text-sm border rounded-xl p-3 bg-gray-50">
             <div class="flex justify-between">
-              <span class="text-gray-500">System weight</span>
-              <span>{{ totalSystemWeight.toFixed(3) }}g</span>
+              <span class="text-gray-500">Total system stock</span>
+              <span>{{ totalSystemQty }} pcs</span>
             </div>
             <div class="flex justify-between">
-              <span class="text-gray-500">Physical weight</span>
-              <span class="font-semibold">{{ Number(physicalWeight || 0).toFixed(3) }}g</span>
+              <span class="text-gray-500">Total physical count</span>
+              <span class="font-semibold">{{ totalPhysicalQty }} pcs</span>
             </div>
             <div class="flex justify-between border-t pt-1 mt-1">
-              <span class="text-gray-500">Variance</span>
-              <span class="font-bold" :class="variance === 0 ? 'text-green-600' : 'text-red-600'">
-                {{ variance >= 0 ? '+' : '' }}{{ variance.toFixed(3) }}g
+              <span class="text-gray-500">Net variance</span>
+              <span class="font-bold" :class="netVariance === 0 ? 'text-green-600' : 'text-red-600'">
+                {{ netVariance >= 0 ? '+' : '' }}{{ netVariance }} pcs
               </span>
             </div>
           </div>
@@ -142,7 +120,7 @@
             class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 text-sm">
             <div>
               <p class="font-medium">{{ r.report_date }}</p>
-              <p class="text-xs text-gray-400">Variance: {{ r.variance_weight ?? '—' }}g</p>
+              <p class="text-xs text-gray-400">{{ r.notes ? r.notes.slice(0, 40) : 'No notes' }}</p>
             </div>
             <span :class="r.status === 'submitted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'" class="badge text-xs">
               {{ r.status }}
@@ -160,51 +138,49 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 
-const reportDate    = ref(new Date().toISOString().split('T')[0])
-const dayData       = ref(null)
-const physicalWeight = ref('')
-const itemCounts    = ref({})
-const notes         = ref('')
-const saving        = ref(false)
-const saveMsg       = ref('')
-const saveError     = ref('')
+const reportDate = ref(new Date().toISOString().split('T')[0])
+const dayData    = ref(null)
+const itemCounts = ref({})
+const notes      = ref('')
+const saving     = ref(false)
+const saveMsg    = ref('')
+const saveError  = ref('')
 
-function lkr(val) {
-  return Number(val || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-const totalSystemWeight = computed(() => {
+const totalSystemQty = computed(() => {
   if (!dayData.value) return 0
-  return dayData.value.products.reduce((s, p) => s + ((p.weight ?? 0) * p.stock_quantity), 0)
+  return dayData.value.products.reduce((s, p) => s + p.stock_quantity, 0)
 })
 
-const variance = computed(() => {
-  const pw = parseFloat(physicalWeight.value || 0)
-  return pw - totalSystemWeight.value
+const totalPhysicalQty = computed(() => {
+  if (!dayData.value) return 0
+  return dayData.value.products.reduce((s, p) => s + (itemCounts.value[p.id] ?? p.stock_quantity), 0)
+})
+
+const netVariance = computed(() => totalPhysicalQty.value - totalSystemQty.value)
+
+const varianceCount = computed(() => {
+  if (!dayData.value) return 0
+  return dayData.value.products.filter(p => getItemVariance(p) !== 0).length
 })
 
 function getItemVariance(p) {
-  const physical = itemCounts.value[p.id] ?? p.stock_quantity
-  return physical - p.stock_quantity
+  return (itemCounts.value[p.id] ?? p.stock_quantity) - p.stock_quantity
 }
 
 async function load() {
   dayData.value = null
   const { data } = await axios.get('/api/reports/day-end')
   dayData.value = data
-  // Init item counts from system
   itemCounts.value = {}
   data.products.forEach(p => { itemCounts.value[p.id] = p.stock_quantity })
-  physicalWeight.value = ''
 }
 
 async function saveReport(status) {
   saving.value = status; saveMsg.value = ''; saveError.value = ''
   try {
     await axios.post('/api/reports/day-end', {
-      report_date:           reportDate.value,
-      physical_gold_weight:  parseFloat(physicalWeight.value || 0),
-      item_counts:           Object.entries(itemCounts.value).map(([id, qty]) => ({
+      report_date:  reportDate.value,
+      item_counts:  Object.entries(itemCounts.value).map(([id, qty]) => ({
         product_id: parseInt(id), physical_qty: qty,
       })),
       notes:  notes.value,

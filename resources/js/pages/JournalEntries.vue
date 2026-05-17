@@ -198,12 +198,8 @@
               <tbody class="divide-y divide-gray-100">
                 <tr v-for="(line, i) in newEntry.lines" :key="i">
                   <td class="table-td">
-                    <select v-model="line.account_id" class="form-input text-sm">
-                      <option value="">— Select —</option>
-                      <optgroup v-for="grp in accountGroups" :key="grp.type" :label="grp.label">
-                        <option v-for="a in grp.items" :key="a.id" :value="a.id">{{ a.code }} – {{ a.name }}</option>
-                      </optgroup>
-                    </select>
+                    <SearchableSelect v-model="line.account_id" :options="flatAccounts"
+                      placeholder="— Select Account —" />
                   </td>
                   <td class="table-td">
                     <input v-model.number="line.debit" type="number" min="0" step="0.01" class="form-input text-right font-mono"
@@ -257,6 +253,7 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { fmtDate as _fmtDate } from '../utils/date.js'
 import { PlusIcon, TrashIcon, XMarkIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 
 const entries      = ref({ data: [] })
 const loading      = ref(false)
@@ -293,6 +290,10 @@ const accountGroups = computed(() =>
     label: typeLabel[type],
     items: allAccounts.value.filter(a => a.type === type),
   })).filter(g => g.items.length)
+)
+
+const flatAccounts = computed(() =>
+  allAccounts.value.map(a => ({ id: a.id, name: a.name, sub: a.code }))
 )
 
 const totalDebit  = computed(() => newEntry.value.lines.reduce((s, l) => s + (Number(l.debit) || 0), 0))

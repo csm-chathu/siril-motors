@@ -25,10 +25,8 @@
         <option value="auditor">Tax Auditor</option>
         <option value="gold_buyer">Gold Buyer</option>
       </select>
-      <select v-model="filterBranch" class="form-input w-48" @change="load">
-        <option value="">All Branches</option>
-        <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
-      </select>
+      <SearchableSelect v-model="filterBranch" :options="branches"
+        placeholder="All Branches" class="w-48" @update:modelValue="load" />
     </div>
 
     <!-- Table -->
@@ -57,7 +55,7 @@
             <td class="table-td text-sm text-gray-600">{{ u.branch?.name ?? '—' }}</td>
             <td class="table-td">
               <div class="flex gap-1 flex-wrap">
-                <span v-if="u.can_override_gold_rate" class="badge bg-gold-100 text-gold-700 text-xs">Rate Override</span>
+                <span v-if="u.can_override_gold_rate" class="badge bg-blue-100 text-blue-700 text-xs">Rate Override</span>
                 <span v-if="u.can_delete_transactions" class="badge bg-red-100 text-red-700 text-xs">Delete Txn</span>
                 <span v-if="!u.can_override_gold_rate && !u.can_delete_transactions && u.role !== 'admin'" class="text-xs text-gray-400">Standard</span>
               </div>
@@ -124,10 +122,7 @@
             </div>
             <div>
               <label class="form-label">Branch</label>
-              <select v-model="form.branch_id" class="form-input">
-                <option :value="null">— None —</option>
-                <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
-              </select>
+              <SearchableSelect v-model="form.branch_id" :options="branchOptions" placeholder="— None —" />
             </div>
           </div>
 
@@ -135,7 +130,7 @@
           <div class="border-t pt-4 space-y-3">
             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Extra Permissions</p>
             <label class="flex items-center gap-3 cursor-pointer select-none">
-              <input type="checkbox" v-model="form.can_override_gold_rate" class="w-4 h-4 rounded text-gold-600" />
+              <input type="checkbox" v-model="form.can_override_gold_rate" class="w-4 h-4 rounded text-blue-600" />
               <div>
                 <p class="text-sm font-medium text-gray-700">Can Override Gold Rate</p>
                 <p class="text-xs text-gray-400">Allow setting/changing gold rates even without admin role</p>
@@ -172,16 +167,18 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 
 const auth     = useAuthStore()
 const authUser = auth.user
 
 const users       = ref([])
 const branches    = ref([])
+const branchOptions = computed(() => [{ id: null, name: '— None —' }, ...branches.value])
 const showModal   = ref(false)
 const editing     = ref(null)
 const saving      = ref(false)

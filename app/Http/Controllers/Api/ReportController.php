@@ -5,13 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\DayEndReport;
 use App\Models\Expense;
-use App\Models\GoldBuyback;
-use App\Models\GoldLoan;
-use App\Models\GoldRate;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\SalaryPayment;
+use App\Models\SupplierPayment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -124,32 +122,43 @@ class ReportController extends Controller
         $to   = $request->date_to   ?? now()->toDateString();
 
         $query = Sale::query()
+            ->where('is_draft', false)
             ->when(!$user->isAdmin(), fn($q) => $q->where('branch_id', $user->branch_id))
-            ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]);
+            ->whereBetween(DB::raw('DATE(sold_at)'), [$from, $to]);
 
         $totals = (clone $query)->selectRaw('
             COUNT(*) as count,
             SUM(total) as total_revenue,
-            SUM(gold_value_total) as gold_value,
-            SUM(gemstone_value_total) as gemstone_value,
-            SUM(making_charges_total) as making_charges,
-            SUM(wastage_total) as wastage,
-            SUM(tax) as total_tax,
             SUM(discount) as total_discount,
+            SUM(tax) as total_tax,
+            SUM(maintenance_amount) as total_maintenance,
             SUM(amount_paid) as amount_paid,
             SUM(total - amount_paid) as outstanding
         ')->first();
 
+        $byPaymentMethod = (clone $query)
+            ->selectRaw('COALESCE(payment_method, "unknown") as method, COUNT(*) as count, SUM(total) as total')
+            ->groupBy('method')
+            ->get();
+
+        $byStatus = (clone $query)
+            ->selectRaw('payment_status as status, COUNT(*) as count, SUM(total) as total')
+            ->groupBy('payment_status')
+            ->get();
+
         $rows = (clone $query)
-            ->with('customer:id,name')
-            ->orderByDesc('created_at')
-            ->get(['id', 'invoice_number', 'customer_id', 'total', 'amount_paid', 'discount', 'tax', 'payment_method', 'sale_type', 'created_at']);
+            ->with('customer:id,name,vehicle_number')
+            ->orderByDesc('sold_at')
+            ->get(['id', 'invoice_number', 'customer_id', 'total', 'amount_paid',
+                   'discount', 'tax', 'maintenance_amount', 'payment_method', 'payment_status', 'sold_at']);
 
         return response()->json([
-            'from'   => $from,
-            'to'     => $to,
-            'totals' => $totals,
-            'rows'   => $rows,
+            'from'               => $from,
+            'to'                 => $to,
+            'totals'             => $totals,
+            'by_payment_method'  => $byPaymentMethod,
+            'by_status'          => $byStatus,
+            'rows'               => $rows,
         ]);
     }
 
@@ -171,16 +180,159 @@ class ReportController extends Controller
             SUM(tax) as total_tax
         ')->first();
 
+        $bySupplier = (clone $query)
+            ->join('suppliers', 'suppliers.id', '=', 'purchases.supplier_id')
+            ->selectRaw('suppliers.name as supplier, COUNT(*) as count, SUM(purchases.total) as total')
+            ->groupBy('suppliers.name')
+            ->orderByDesc('total')
+            ->get();
+
+        $byStatus = (clone $query)
+            ->selectRaw('status, COUNT(*) as count, SUM(total) as total')
+            ->groupBy('status')
+            ->get();
+
         $rows = (clone $query)
             ->with('supplier:id,name')
             ->orderByDesc('purchased_at')
-            ->get(['id', 'purchase_number', 'supplier_id', 'purchased_at', 'subtotal', 'tax', 'total', 'status', 'payment_method']);
+            ->get(['id', 'purchase_number', 'supplier_id', 'purchased_at',
+                   'subtotal', 'tax', 'total', 'status', 'payment_method']);
 
         return response()->json([
-            'from'   => $from,
-            'to'     => $to,
-            'totals' => $totals,
-            'rows'   => $rows,
+            'from'        => $from,
+            'to'          => $to,
+            'totals'      => $totals,
+            'by_supplier' => $bySupplier,
+            'by_status'   => $byStatus,
+            'rows'        => $rows,
+        ]);
+    }
+
+    /** Inventory / stock value report */
+    public function inventory(Request $request)
+    {
+        $user = $request->user();
+
+        $products = Product::query()
+            ->where('is_active', true)
+            ->when(!$user->isAdmin(), fn($q) => $q->where('branch_id', $user->branch_id))
+            ->with(['partCategory:id,name', 'brand:id,name'])
+            ->get(['id', 'sku', 'name', 'part_category_id', 'brand_id',
+                   'stock_quantity', 'min_stock_level', 'purchase_price', 'selling_price']);
+
+        $totals = [
+            'total_products'    => $products->count(),
+            'total_stock_value' => round($products->sum(fn($p) => $p->purchase_price * $p->stock_quantity), 2),
+            'total_sell_value'  => round($products->sum(fn($p) => $p->selling_price * $p->stock_quantity), 2),
+            'low_stock_count'   => $products->filter(fn($p) => $p->stock_quantity > 0 && $p->stock_quantity <= $p->min_stock_level)->count(),
+            'out_of_stock'      => $products->where('stock_quantity', 0)->count(),
+        ];
+
+        $byCategory = $products->groupBy(fn($p) => $p->partCategory?->name ?? 'Uncategorised')
+            ->map(fn($items, $cat) => [
+                'category'    => $cat,
+                'count'       => $items->count(),
+                'stock_value' => round($items->sum(fn($p) => $p->purchase_price * $p->stock_quantity), 2),
+                'sell_value'  => round($items->sum(fn($p) => $p->selling_price * $p->stock_quantity), 2),
+            ])->values();
+
+        return response()->json([
+            'totals'      => $totals,
+            'by_category' => $byCategory,
+            'products'    => $products,
+        ]);
+    }
+
+    /** Top-selling products by quantity and revenue */
+    public function topProducts(Request $request)
+    {
+        $user  = $request->user();
+        $from  = $request->date_from ?? now()->startOfMonth()->toDateString();
+        $to    = $request->date_to   ?? now()->toDateString();
+        $limit = min((int) ($request->limit ?? 20), 100);
+
+        $rows = DB::table('sale_items')
+            ->join('products',  'products.id',  '=', 'sale_items.product_id')
+            ->join('sales',     'sales.id',     '=', 'sale_items.sale_id')
+            ->leftJoin('part_categories', 'part_categories.id', '=', 'products.part_category_id')
+            ->where('sales.is_draft', false)
+            ->whereNull('sales.deleted_at')
+            ->when(!$user->isAdmin(), fn($q) => $q->where('sales.branch_id', $user->branch_id))
+            ->whereBetween(DB::raw('DATE(sales.sold_at)'), [$from, $to])
+            ->selectRaw('
+                products.id,
+                products.sku,
+                products.name,
+                part_categories.name as category,
+                SUM(sale_items.quantity) as qty_sold,
+                SUM(sale_items.total) as revenue,
+                AVG(sale_items.unit_price) as avg_price
+            ')
+            ->groupBy('products.id', 'products.sku', 'products.name', 'part_categories.name')
+            ->orderByDesc('qty_sold')
+            ->limit($limit)
+            ->get();
+
+        return response()->json([
+            'from' => $from,
+            'to'   => $to,
+            'rows' => $rows,
+        ]);
+    }
+
+    /** Gross profit & loss summary */
+    public function profitLoss(Request $request)
+    {
+        $user = $request->user();
+        $from = $request->date_from ?? now()->startOfMonth()->toDateString();
+        $to   = $request->date_to   ?? now()->toDateString();
+
+        $salesQuery = Sale::query()
+            ->where('is_draft', false)
+            ->when(!$user->isAdmin(), fn($q) => $q->where('branch_id', $user->branch_id))
+            ->whereBetween(DB::raw('DATE(sold_at)'), [$from, $to]);
+
+        $revenue = (clone $salesQuery)->selectRaw('
+            SUM(total) as total_revenue,
+            SUM(maintenance_amount) as total_maintenance,
+            SUM(discount) as total_discount
+        ')->first();
+
+        $cogs = DB::table('sale_items')
+            ->join('sales',    'sales.id',    '=', 'sale_items.sale_id')
+            ->join('products', 'products.id', '=', 'sale_items.product_id')
+            ->where('sales.is_draft', false)
+            ->whereNull('sales.deleted_at')
+            ->when(!$user->isAdmin(), fn($q) => $q->where('sales.branch_id', $user->branch_id))
+            ->whereBetween(DB::raw('DATE(sales.sold_at)'), [$from, $to])
+            ->sum(DB::raw('sale_items.quantity * products.purchase_price'));
+
+        $expenses = Expense::query()
+            ->when(!$user->isAdmin(), fn($q) => $q->where('branch_id', $user->branch_id))
+            ->whereBetween('expense_date', [$from, $to])
+            ->sum('amount');
+
+        $totalRevenue = (float) ($revenue->total_revenue ?? 0);
+        $grossProfit  = $totalRevenue - (float) $cogs;
+        $netProfit    = $grossProfit - (float) $expenses;
+
+        $trend = (clone $salesQuery)
+            ->selectRaw('DATE(sold_at) as date, SUM(total) as revenue, COUNT(*) as invoices')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        return response()->json([
+            'from'         => $from,
+            'to'           => $to,
+            'revenue'      => round($totalRevenue, 2),
+            'maintenance'  => round((float) ($revenue->total_maintenance ?? 0), 2),
+            'cogs'         => round((float) $cogs, 2),
+            'gross_profit' => round($grossProfit, 2),
+            'expenses'     => round((float) $expenses, 2),
+            'net_profit'   => round($netProfit, 2),
+            'gross_margin' => $totalRevenue > 0 ? round(($grossProfit / $totalRevenue) * 100, 1) : 0,
+            'trend'        => $trend,
         ]);
     }
 

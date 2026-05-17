@@ -8,22 +8,17 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('products', function (Blueprint $table) {
-            $table->string('image_public_id')->nullable()->after('image');
-        });
-
-        Schema::table('gold_buybacks', function (Blueprint $table) {
-            $table->json('proof_images')->nullable()->after('notes');
+            // For spare parts, you may want a single image column. Remove jewelry-specific columns.
+            $table->string('image')->nullable()->after('selling_price');
         });
     }
 
     public function down(): void
     {
         Schema::table('products', function (Blueprint $table) {
-            $table->dropColumn('image_public_id');
-        });
-
-        Schema::table('gold_buybacks', function (Blueprint $table) {
-            $table->dropColumn('proof_images');
+            $table->dropColumn('image');
         });
     }
 };
+
+

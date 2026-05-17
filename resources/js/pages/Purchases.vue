@@ -3,10 +3,8 @@
     <div class="flex items-center justify-between">
       <div class="flex gap-3">
         <input v-model="search" type="search" placeholder="PO number…" class="form-input w-44" @input="debouncedFetch" />
-        <select v-model="supplierFilter" class="form-input w-44" @change="fetch">
-          <option value="">All suppliers</option>
-          <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
-        </select>
+        <SearchableSelect v-model="supplierFilter" :options="suppliers"
+          placeholder="All suppliers" class="w-44" @update:modelValue="fetch" />
       </div>
       <router-link to="/purchases/new" class="btn-primary flex items-center gap-2">
         <PlusIcon class="w-4 h-4" /> New Purchase
@@ -117,10 +115,11 @@
 
           <div v-else class="px-6 py-4 space-y-5">
             <!-- Summary row -->
-            <div class="grid grid-cols-3 gap-4 text-sm">
+            <div class="grid grid-cols-4 gap-3 text-sm">
               <div class="bg-gray-50 rounded-lg p-3">
                 <p class="text-xs text-gray-400 mb-1">Supplier</p>
                 <p class="font-semibold text-gray-800">{{ view.data?.supplier?.name ?? '—' }}</p>
+                <p v-if="view.data?.supplier_ref" class="text-xs text-gray-500 font-mono mt-0.5">Ref: {{ view.data.supplier_ref }}</p>
               </div>
               <div class="bg-gray-50 rounded-lg p-3">
                 <p class="text-xs text-gray-400 mb-1">Payment</p>
@@ -128,6 +127,10 @@
                 <p v-if="view.data?.cheque_number" class="text-xs text-gray-500 mt-0.5">
                   {{ view.data.cheque_number }} · {{ view.data.cheque_bank_name }}
                 </p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-3">
+                <p class="text-xs text-gray-400 mb-1">Expected Delivery</p>
+                <p class="font-semibold text-gray-800">{{ view.data?.expected_delivery ? fmtDate(view.data.expected_delivery) : '—' }}</p>
               </div>
               <div class="bg-gray-50 rounded-lg p-3">
                 <p class="text-xs text-gray-400 mb-1">Status</p>
@@ -142,7 +145,9 @@
                   <tr>
                     <th class="table-th">Product</th>
                     <th class="table-th">SKU</th>
-                    <th class="table-th text-center">Qty</th>
+                    <th class="table-th">Batch</th>
+                    <th class="table-th text-center">Ordered</th>
+                    <th class="table-th text-center">Received</th>
                     <th class="table-th text-right">Buy Price</th>
                     <th class="table-th text-right">Sell Price</th>
                     <th class="table-th text-right">Line Total</th>
@@ -159,23 +164,34 @@
                       </div>
                     </td>
                     <td class="table-td font-mono text-xs text-gray-500">{{ item.product?.sku ?? '—' }}</td>
-                    <td class="table-td text-center">{{ item.quantity }}</td>
+                    <td class="table-td">
+                      <span v-if="item.batch_number" class="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{{ item.batch_number }}</span>
+                      <span v-else class="text-gray-300">—</span>
+                    </td>
+                    <td class="table-td text-center">{{ item.ordered_quantity ?? item.quantity }}</td>
+                    <td class="table-td text-center">
+                      <span v-if="item.received_quantity != null"
+                        :class="item.received_quantity < (item.ordered_quantity ?? item.quantity) ? 'text-amber-600 font-semibold' : 'text-green-600'">
+                        {{ item.received_quantity }}
+                      </span>
+                      <span v-else class="text-gray-300">—</span>
+                    </td>
                     <td class="table-td text-right">LKR {{ Number(item.unit_cost).toLocaleString() }}</td>
-                    <td class="table-td text-right text-gold-700 font-medium">LKR {{ Number(item.selling_price ?? 0).toLocaleString() }}</td>
+                    <td class="table-td text-right text-blue-700 font-medium">LKR {{ Number(item.selling_price ?? 0).toLocaleString() }}</td>
                     <td class="table-td text-right font-semibold">LKR {{ Number(item.total).toLocaleString() }}</td>
                   </tr>
                 </tbody>
                 <tfoot class="bg-gray-50 border-t text-sm">
                   <tr>
-                    <td colspan="5" class="table-td text-right text-gray-500">Subtotal</td>
+                    <td colspan="7" class="table-td text-right text-gray-500">Subtotal</td>
                     <td class="table-td text-right">LKR {{ Number(view.data?.subtotal ?? 0).toLocaleString() }}</td>
                   </tr>
                   <tr v-if="view.data?.tax">
-                    <td colspan="5" class="table-td text-right text-gray-500">Tax</td>
+                    <td colspan="7" class="table-td text-right text-gray-500">Tax</td>
                     <td class="table-td text-right">LKR {{ Number(view.data.tax).toLocaleString() }}</td>
                   </tr>
                   <tr class="font-bold text-gray-800">
-                    <td colspan="5" class="table-td text-right">Total</td>
+                    <td colspan="7" class="table-td text-right">Total</td>
                     <td class="table-td text-right text-base">LKR {{ Number(view.data?.total ?? 0).toLocaleString() }}</td>
                   </tr>
                 </tfoot>
@@ -313,7 +329,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 
 import axios from 'axios'
 import { PlusIcon, TrashIcon, CheckCircleIcon, EyeIcon, ExclamationTriangleIcon, BanknotesIcon } from '@heroicons/vue/24/outline'

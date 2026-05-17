@@ -18,7 +18,7 @@
         <button v-for="tab in tabs" :key="tab.id" @click="activeTab = tab.id"
           class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
           :class="activeTab === tab.id
-            ? 'border-gold-600 text-gold-700'
+            ? 'border-blue-600 text-blue-700'
             : 'border-transparent text-gray-500 hover:text-gray-700'">
           <component :is="tab.icon" class="w-4 h-4 inline mr-1.5" />
           {{ tab.label }}
@@ -36,11 +36,11 @@
           <label class="form-label">Send To</label>
           <div class="flex gap-3 mt-1">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" v-model="promoTarget" value="all" class="text-gold-600" />
+              <input type="radio" v-model="promoTarget" value="all" class="text-blue-600" />
               <span class="text-sm">All customers with phone ({{ allCustomers.length }})</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" v-model="promoTarget" value="selected" class="text-gold-600" />
+              <input type="radio" v-model="promoTarget" value="selected" class="text-blue-600" />
               <span class="text-sm">Select specific customers</span>
             </label>
           </div>
@@ -56,7 +56,7 @@
           <div class="border rounded-lg max-h-48 overflow-y-auto">
             <label v-for="c in filteredCustomers" :key="c.id"
               class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0">
-              <input type="checkbox" :value="c.id" v-model="selectedCustomerIds" class="rounded text-gold-600" />
+              <input type="checkbox" :value="c.id" v-model="selectedCustomerIds" class="rounded text-blue-600" />
               <span class="text-sm font-medium">{{ c.name }}</span>
               <span class="text-xs text-gray-500">{{ c.phone }}</span>
             </label>
@@ -285,7 +285,7 @@
           <div class="flex gap-1">
             <button v-for="p in logsMeta.last_page" :key="p" @click="logsPage = p; loadLogs()"
               class="px-2.5 py-1 rounded border text-xs"
-              :class="p === logsPage ? 'bg-gold-600 text-white border-gold-600' : 'hover:bg-gray-100'">
+              :class="p === logsPage ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-gray-100'">
               {{ p }}
             </button>
           </div>

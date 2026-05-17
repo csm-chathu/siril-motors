@@ -53,16 +53,10 @@
           <div><label class="form-label">Start Date *</label><input v-model="createForm.start_date" type="date" class="form-input" /></div>
           <div><label class="form-label">Due Date</label><input v-model="createForm.due_date" type="date" class="form-input" /></div>
           <div><label class="form-label">Liability Account *</label>
-            <select v-model="createForm.liability_account_id" class="form-input">
-              <option value="">Select</option>
-              <option v-for="a in liabilityAccounts" :key="a.id" :value="a.id">{{ a.code }} - {{ a.name }}</option>
-            </select>
+            <SearchableSelect v-model="createForm.liability_account_id" :options="liabilityAccountOptions" placeholder="Select account…" />
           </div>
           <div><label class="form-label">Received To Account *</label>
-            <select v-model="createForm.received_to_account_id" class="form-input">
-              <option value="">Select</option>
-              <option v-for="a in assetAccounts" :key="a.id" :value="a.id">{{ a.code }} - {{ a.name }}</option>
-            </select>
+            <SearchableSelect v-model="createForm.received_to_account_id" :options="assetAccountOptions" placeholder="Select account…" />
           </div>
         </div>
         <div class="flex justify-end gap-2">
@@ -78,10 +72,7 @@
         <div class="grid grid-cols-2 gap-4">
           <div><label class="form-label">Payment Date *</label><input v-model="repayForm.payment_date" type="date" class="form-input" /></div>
           <div><label class="form-label">Paid From *</label>
-            <select v-model="repayForm.paid_from_account_id" class="form-input">
-              <option value="">Select</option>
-              <option v-for="a in assetAccounts" :key="a.id" :value="a.id">{{ a.code }} - {{ a.name }}</option>
-            </select>
+            <SearchableSelect v-model="repayForm.paid_from_account_id" :options="assetAccountOptions" placeholder="Select account…" />
           </div>
           <div><label class="form-label">Principal</label><input v-model.number="repayForm.principal_amount" type="number" min="0" step="0.01" class="form-input" /></div>
           <div><label class="form-label">Interest</label><input v-model.number="repayForm.interest_amount" type="number" min="0" step="0.01" class="form-input" /></div>
@@ -99,6 +90,7 @@
 import { onMounted, ref, computed } from 'vue'
 import axios from 'axios'
 import { fmtDate as _fmtDate } from '../utils/date.js'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 
 const loans = ref({ data: [] })
 const accounts = ref([])
@@ -113,6 +105,8 @@ const repayForm = ref({ payment_date: today(), principal_amount: 0, interest_amo
 
 const liabilityAccounts = computed(() => accounts.value.filter(a => a.type === 'liability'))
 const assetAccounts = computed(() => accounts.value.filter(a => a.type === 'asset'))
+const liabilityAccountOptions = computed(() => liabilityAccounts.value.map(a => ({ id: a.id, name: a.name, sub: a.code })))
+const assetAccountOptions     = computed(() => assetAccounts.value.map(a => ({ id: a.id, name: a.name, sub: a.code })))
 
 async function load() {
   const [loanRes, accRes] = await Promise.all([

@@ -2,7 +2,7 @@ import axios from 'axios'
 
 export function cloudinaryConfig() {
   return {
-    defaultFolder: import.meta.env.VITE_CLOUDINARY_FOLDER || 'jewellery',
+    defaultFolder: import.meta.env.VITE_CLOUDINARY_FOLDER || 'spare-parts',
   }
 }
 

@@ -92,10 +92,7 @@
             </select>
           </div>
           <div class="col-span-2"><label class="form-label">Paid From Account *</label>
-            <select v-model="payForm.paid_from_account_id" class="form-input">
-              <option value="">Select</option>
-              <option v-for="a in assetAccounts" :key="a.id" :value="a.id">{{ a.code }} - {{ a.name }}</option>
-            </select>
+            <SearchableSelect v-model="payForm.paid_from_account_id" :options="assetAccountOptions" placeholder="Select account…" />
           </div>
           <template v-if="payForm.payment_method === 'cheque'">
             <div><label class="form-label">Cheque Number *</label><input v-model="payForm.cheque_number" class="form-input" /></div>
@@ -115,6 +112,7 @@
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { fmtDate as _fmtDate } from '../utils/date.js'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 
 const rents = ref({ data: [] })
 const reminders = ref([])
@@ -131,6 +129,7 @@ const createForm = ref({
 const payForm = ref({ payment_date: today(), payment_method: 'bank_transfer', paid_from_account_id: '', cheque_number: '', cheque_date: today(), cheque_bank_name: '' })
 
 const assetAccounts = computed(() => accounts.value.filter(a => a.type === 'asset'))
+const assetAccountOptions = computed(() => assetAccounts.value.map(a => ({ id: a.id, name: a.name, sub: a.code })))
 
 async function load() {
   const [r, rem, acc] = await Promise.all([

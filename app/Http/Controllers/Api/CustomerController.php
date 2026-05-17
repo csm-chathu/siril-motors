@@ -26,15 +26,16 @@ class CustomerController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'          => 'required|string|max:150',
-            'email'         => 'nullable|email|unique:customers',
-            'phone'         => 'nullable|string|max:30',
-            'address'       => 'nullable|string',
-            'city'          => 'nullable|string|max:100',
-            'country'       => 'nullable|string|max:100',
-            'date_of_birth' => 'nullable|date',
-            'gender'        => 'nullable|in:male,female,other',
-            'notes'         => 'nullable|string',
+            'name'           => 'required|string|max:150',
+            'email'          => 'nullable|email|unique:customers',
+            'phone'          => 'nullable|string|max:30',
+            'vehicle_number' => 'nullable|string|max:30',
+            'address'        => 'nullable|string',
+            'city'           => 'nullable|string|max:100',
+            'country'        => 'nullable|string|max:100',
+            'date_of_birth'  => 'nullable|date',
+            'gender'         => 'nullable|in:male,female,other',
+            'notes'          => 'nullable|string',
         ]);
         $data['branch_id'] = $request->user()->branch_id;
         return response()->json(Customer::create($data), 201);
@@ -49,15 +50,16 @@ class CustomerController extends Controller
     public function update(Request $request, Customer $customer)
     {
         $data = $request->validate([
-            'name'          => 'required|string|max:150',
-            'email'         => 'nullable|email|unique:customers,email,' . $customer->id,
-            'phone'         => 'nullable|string|max:30',
-            'address'       => 'nullable|string',
-            'city'          => 'nullable|string|max:100',
-            'country'       => 'nullable|string|max:100',
-            'date_of_birth' => 'nullable|date',
-            'gender'        => 'nullable|in:male,female,other',
-            'notes'         => 'nullable|string',
+            'name'           => 'required|string|max:150',
+            'email'          => 'nullable|email|unique:customers,email,' . $customer->id,
+            'phone'          => 'nullable|string|max:30',
+            'vehicle_number' => 'nullable|string|max:30',
+            'address'        => 'nullable|string',
+            'city'           => 'nullable|string|max:100',
+            'country'        => 'nullable|string|max:100',
+            'date_of_birth'  => 'nullable|date',
+            'gender'         => 'nullable|in:male,female,other',
+            'notes'          => 'nullable|string',
         ]);
         $this->authorizeBranch($customer->branch_id);
         $customer->update($data);
@@ -78,7 +80,7 @@ class CustomerController extends Controller
         if (!$user->isAdmin()) {
             $query->where('branch_id', $user->branch_id);
         }
-        return response()->json($query->get(['id', 'name', 'phone']));
+        return response()->json($query->get(['id', 'name', 'phone', 'vehicle_number']));
     }
 
     private function authorizeBranch(?int $branchId): void

@@ -9,11 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('sales', function (Blueprint $table) {
-            $table->enum('sale_type', ['instant', 'booking'])->default('instant')->after('payment_status');
+            // Add after 'status' or at the end if unsure
+            $table->enum('sale_type', ['instant', 'booking'])->default('instant')->after('status');
             $table->enum('delivery_status', ['booked', 'delivered', 'cancelled'])->default('delivered')->after('sale_type');
             $table->date('booking_expires_at')->nullable()->after('delivery_status');
             $table->timestamp('delivered_at')->nullable()->after('booking_expires_at');
-            $table->foreignId('journal_entry_id')->nullable()->after('notes')->constrained('journal_entries')->nullOnDelete();
+            $table->foreignId('journal_entry_id')->nullable()->constrained('journal_entries')->nullOnDelete();
         });
 
         Schema::table('purchases', function (Blueprint $table) {

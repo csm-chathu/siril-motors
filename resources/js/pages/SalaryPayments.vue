@@ -13,10 +13,8 @@
 
     <!-- Tabs -->
     <div class="flex flex-wrap items-center gap-3">
-      <select v-model="empFilter" class="form-input w-52" @change="fetchPayments">
-        <option value="">All employees</option>
-        <option v-for="e in allEmployees" :key="e.id" :value="e.id">{{ e.employee_number }} – {{ e.name }}</option>
-      </select>
+      <SearchableSelect v-model="empFilter" :options="employeeOptions"
+        placeholder="All employees" class="w-52" @update:modelValue="fetchPayments" />
       <input v-model="dateFrom" type="date" class="form-input w-36" @change="fetchPayments" title="From" />
       <span class="text-gray-400 text-xs">to</span>
       <input v-model="dateTo" type="date" class="form-input w-36" @change="fetchPayments" title="To" />
@@ -264,7 +262,7 @@
 
         <!-- Current active rates -->
         <div class="space-y-4">
-          <div v-if="currentRates" class="card border-2 border-gold-300 bg-gold-50/30 space-y-3">
+          <div v-if="currentRates" class="card border-2 border-blue-300 bg-blue-50/30 space-y-3">
             <div class="flex items-center gap-2">
               <span class="badge bg-green-100 text-green-700 text-xs">Active</span>
               <h3 class="font-semibold text-gray-800">Current Rates</h3>
@@ -331,12 +329,8 @@
         <form @submit.prevent="submitPayment" class="overflow-y-auto flex-1 p-6 space-y-4">
           <div>
             <label class="form-label">Employee *</label>
-            <select v-model="payForm.employee_id" class="form-input" required @change="prefillSalary">
-              <option value="">— Select Employee —</option>
-              <option v-for="e in allEmployees" :key="e.id" :value="e.id">
-                {{ e.employee_number }} – {{ e.name }} (LKR {{ lkr(e.basic_salary) }})
-              </option>
-            </select>
+            <SearchableSelect v-model="payForm.employee_id" :options="employeeOptions"
+              placeholder="— Select Employee —" @update:modelValue="prefillSalary" />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
@@ -427,10 +421,8 @@
             </div>
             <div>
               <label class="form-label">Pay From Account *</label>
-              <select v-model="payForm.paid_from_account_id" class="form-input" required>
-                <option value="">— Select —</option>
-                <option v-for="a in cashAccounts" :key="a.id" :value="a.id">{{ a.code }} – {{ a.name }}</option>
-              </select>
+              <SearchableSelect v-model="payForm.paid_from_account_id" :options="accountOptions"
+                placeholder="— Select Account —" />
             </div>
           </div>
           <div>
@@ -456,6 +448,7 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { fmtDate as _fmtDate } from '../utils/date.js'
 import { useRouter } from 'vue-router'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 import {
   BanknotesIcon, TrashIcon, XMarkIcon, ArrowPathIcon,
   DocumentTextIcon, PrinterIcon, BuildingLibraryIcon,
@@ -466,10 +459,17 @@ const router = useRouter()
 const payments       = ref({ data: [] })
 const allEmployees   = ref([])
 const cashAccounts   = ref([])
+
+const employeeOptions = computed(() =>
+  allEmployees.value.map(e => ({ id: e.id, name: `${e.employee_number} – ${e.name}` }))
+)
+const accountOptions = computed(() =>
+  cashAccounts.value.map(a => ({ id: a.id, name: `${a.code} – ${a.name}` }))
+)
 const summaryData    = ref(null)
 const currentRates   = ref(null)
 const settingsHistory = ref([])
-const branding       = ref({ shop_name: 'Jewellery Store', logo_url: '' })
+const branding       = ref({ shop_name: 'Siril Motors', logo_url: '' })
 const loading        = ref(false)
 const activeTab      = ref('payments')
 const empFilter      = ref('')

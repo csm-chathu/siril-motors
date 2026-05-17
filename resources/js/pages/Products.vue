@@ -3,18 +3,18 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <input v-model="search" type="search" placeholder="Search products…" class="form-input w-64" @input="debouncedFetch" />
-        <select v-model="categoryFilter" class="form-input w-44" @change="fetchProducts">
-          <option value="">All categories</option>
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-        </select>
+        <input v-model="search" type="search" placeholder="Search parts…" class="form-input w-64" @input="debouncedFetch" />
+        <SearchableSelect v-model="partCategoryFilter" :options="partCategories"
+          placeholder="All categories" class="w-44" @update:modelValue="fetchProducts" />
+        <SearchableSelect v-model="vehicleTypeFilter" :options="vehicleTypes"
+          placeholder="All vehicles" class="w-36" @update:modelValue="fetchProducts" />
         <label class="flex items-center gap-1 text-sm text-gray-600 cursor-pointer">
-          <input type="checkbox" v-model="lowStockOnly" @change="fetchProducts" class="rounded text-gold-600" />
+          <input type="checkbox" v-model="lowStockOnly" @change="fetchProducts" class="rounded text-blue-600" />
           Low stock only
         </label>
       </div>
       <button @click="openCreate" class="btn-primary flex items-center gap-2">
-        <PlusIcon class="w-4 h-4" /> Add Product
+        <PlusIcon class="w-4 h-4" /> Add Part
       </button>
     </div>
 
@@ -25,10 +25,11 @@
           <thead class="bg-gray-50 border-b border-gray-200">
             <tr>
               <th class="table-th">SKU</th>
-              <th class="table-th">Barcode</th>
-              <th class="table-th">Name</th>
-              <th class="table-th">Category</th>
-              <th class="table-th">Material / Karat</th>
+              <th class="table-th">Part Name</th>
+              <th class="table-th">Part Category</th>
+              <th class="table-th">Vehicle / Brand / Model</th>
+              <th class="table-th">Quality</th>
+              <th class="table-th">Rack</th>
               <th class="table-th">Stock</th>
               <th class="table-th">Buy Price</th>
               <th class="table-th">Sell Price</th>
@@ -39,13 +40,12 @@
           <tbody class="divide-y divide-gray-100">
             <tr v-for="p in products.data" :key="p.id" class="hover:bg-gray-50">
               <td class="table-td font-mono text-xs">{{ p.sku }}</td>
-              <td class="table-td font-mono text-xs text-gray-700">{{ p.barcode || '—' }}</td>
               <td class="table-td">
                 <div class="flex items-center gap-2">
                   <img
                     v-if="p.image"
                     :src="p.image"
-                    alt="product"
+                    alt="part"
                     class="w-9 h-9 rounded-md object-cover border border-gray-200"
                   />
                   <div
@@ -54,18 +54,28 @@
                   >
                     IMG
                   </div>
-                  <span class="font-medium">{{ p.name }}</span>
+                  <div>
+                    <span class="font-medium">{{ p.name }}</span>
+                    <p v-if="p.barcode" class="text-xs text-gray-400 font-mono">{{ p.barcode }}</p>
+                  </div>
                 </div>
               </td>
-              <td class="table-td text-gray-500">{{ p.category?.name }}</td>
-              <td class="table-td">{{ p.material }} {{ p.karat ? `(${p.karat})` : '' }}</td>
+              <td class="table-td text-gray-500">{{ p.part_category?.name || '—' }}</td>
+              <td class="table-td text-xs text-gray-600">
+                <span v-if="p.vehicle_type">{{ p.vehicle_type.name }}</span>
+                <span v-if="p.brand"> · {{ p.brand.name }}</span>
+                <span v-if="p.model"> · {{ p.model.name }}</span>
+                <span v-if="!p.vehicle_type && !p.brand && !p.model">—</span>
+              </td>
+              <td class="table-td text-xs text-gray-600">{{ p.quality_type?.name || '—' }}</td>
+              <td class="table-td text-xs font-mono text-gray-500">{{ p.rack_location || '—' }}</td>
               <td class="table-td">
                 <span :class="p.stock_quantity <= p.min_stock_level ? 'badge bg-red-100 text-red-700' : 'badge bg-green-100 text-green-700'">
                   {{ p.stock_quantity }}
                 </span>
               </td>
               <td class="table-td">LKR {{ Number(p.purchase_price).toLocaleString() }}</td>
-              <td class="table-td font-semibold text-gold-700">LKR {{ Number(p.selling_price).toLocaleString() }}</td>
+              <td class="table-td font-semibold text-blue-700">LKR {{ Number(p.selling_price).toLocaleString() }}</td>
               <td class="table-td">
                 <span :class="p.is_active ? 'badge bg-green-100 text-green-700' : 'badge bg-gray-100 text-gray-500'">
                   {{ p.is_active ? 'Active' : 'Inactive' }}
@@ -86,7 +96,7 @@
               </td>
             </tr>
             <tr v-if="!products.data?.length">
-              <td colspan="10" class="table-td text-center text-gray-400 py-8">No products found</td>
+              <td colspan="11" class="table-td text-center text-gray-400 py-8">No parts found</td>
             </tr>
           </tbody>
         </table>
@@ -102,8 +112,18 @@
     </div>
 
     <!-- Modal -->
-    <ProductModal v-if="showModal" :product="editing" :categories="categories" :suppliers="suppliers"
-      @close="showModal = false" @saved="onSaved" />
+    <ProductModal
+      v-if="showModal"
+      :product="editing"
+      :suppliers="suppliers"
+      :vehicle-types="vehicleTypes"
+      :brands="brands"
+      :vehicle-models="vehicleModels"
+      :part-categories="partCategories"
+      :quality-types="qualityTypes"
+      @close="showModal = false"
+      @saved="onSaved"
+    />
   </div>
 </template>
 
@@ -113,16 +133,22 @@ import axios from 'axios'
 import { PencilSquareIcon, PlusIcon, PrinterIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import JsBarcode from 'jsbarcode'
 import ProductModal from '@/components/ProductModal.vue'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 
-const products      = ref({ data: [] })
-const categories    = ref([])
-const suppliers     = ref([])
-const search        = ref('')
-const categoryFilter = ref('')
-const lowStockOnly  = ref(false)
-const page          = ref(1)
-const showModal     = ref(false)
-const editing       = ref(null)
+const products         = ref({ data: [] })
+const suppliers        = ref([])
+const vehicleTypes     = ref([])
+const brands           = ref([])
+const vehicleModels    = ref([])
+const partCategories   = ref([])
+const qualityTypes     = ref([])
+const search           = ref('')
+const partCategoryFilter = ref('')
+const vehicleTypeFilter  = ref('')
+const lowStockOnly     = ref(false)
+const page             = ref(1)
+const showModal        = ref(false)
+const editing          = ref(null)
 
 let debounceTimer = null
 function debouncedFetch() {
@@ -131,16 +157,32 @@ function debouncedFetch() {
 }
 
 async function fetchProducts() {
-  const params = { page: page.value, search: search.value, category_id: categoryFilter.value }
+  const params = {
+    page: page.value,
+    search: search.value,
+    part_category_id: partCategoryFilter.value,
+    vehicle_type_id:  vehicleTypeFilter.value,
+  }
   if (lowStockOnly.value) params.low_stock = 1
   const { data } = await axios.get('/api/products', { params })
   products.value = data
 }
 
 async function fetchRefs() {
-  const [c, s] = await Promise.all([axios.get('/api/categories/all'), axios.get('/api/suppliers/all')])
-  categories.value = c.data
-  suppliers.value  = s.data
+  const [s, vt, b, vm, pc, qt] = await Promise.all([
+    axios.get('/api/suppliers/all'),
+    axios.get('/api/vehicle-types'),
+    axios.get('/api/brands'),
+    axios.get('/api/vehicle-models'),
+    axios.get('/api/part-categories'),
+    axios.get('/api/quality-types'),
+  ])
+  suppliers.value      = s.data
+  vehicleTypes.value   = vt.data
+  brands.value         = b.data
+  vehicleModels.value  = vm.data
+  partCategories.value = pc.data
+  qualityTypes.value   = qt.data
 }
 
 function openCreate() { editing.value = null; showModal.value = true }
@@ -157,8 +199,6 @@ function createBarcodeSvg(value) {
     marginRight: 3,
     displayValue: false,
   })
-  // preserveAspectRatio="none" forces the SVG to stretch to the container
-  // width rather than shrinking bars — critical for 203 DPI readability
   svg.setAttribute('preserveAspectRatio', 'none')
   return svg.outerHTML
 }
@@ -166,45 +206,25 @@ function createBarcodeSvg(value) {
 function printProductBarcode(product) {
   if (!product?.sku) return
   const barcodeValue = product.barcode?.trim() || product.sku
-
-  const barcodeSvg  = createBarcodeSvg(barcodeValue)
-  const safeName    = (product.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const safeBarcode = barcodeValue.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const barcodeSvg   = createBarcodeSvg(barcodeValue)
+  const safeName     = (product.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const safeBarcode  = barcodeValue.replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
   const html = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
   <style>
-    @media print {
-      @page { size: 1.181in 0.787in; margin: 0; }
-    }
+    @media print { @page { size: 1.181in 0.787in; margin: 0; } }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
-      width: 30mm; height: 20mm;
-      margin: 0; padding: 0;
-      background: #fff;
-      font-family: Arial, Helvetica, sans-serif;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .label {
-      width: 30mm; height: 20mm;
-      padding: 0.8mm 1.5mm 0.5mm;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: space-between;
-      overflow: hidden;
-    }
-    .name {
-      font-size: 6.5pt; font-weight: 700;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      width: 100%; text-align: center; line-height: 1; flex-shrink: 0;
-    }
+    html, body { width: 30mm; height: 20mm; margin: 0; padding: 0; background: #fff;
+      font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .label { width: 30mm; height: 20mm; padding: 0.8mm 1.5mm 0.5mm;
+      display: flex; flex-direction: column; align-items: center; justify-content: space-between; overflow: hidden; }
+    .name { font-size: 6.5pt; font-weight: 700; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; width: 100%; text-align: center; line-height: 1; flex-shrink: 0; }
     svg { width: 100%; height: 9.5mm; display: block; flex-shrink: 0; }
-    .sku {
-      font-size: 8pt; font-weight: 700; letter-spacing: 1px;
-      text-align: center; margin-top: 0.4mm; line-height: 1;
-    }
+    .sku { font-size: 8pt; font-weight: 700; letter-spacing: 1px; text-align: center; margin-top: 0.4mm; line-height: 1; }
   </style>
 </head>
 <body>

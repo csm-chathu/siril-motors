@@ -159,10 +159,7 @@
             </div>
             <div>
               <label class="form-label">Paid By User *</label>
-              <select v-model.number="form.paid_by_user_id" required class="form-input">
-                <option value="">— Select User —</option>
-                <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
-              </select>
+              <SearchableSelect v-model="form.paid_by_user_id" :options="users" placeholder="— Select User —" />
             </div>
             <div class="col-span-2">
               <label class="form-label">Notes</label>
@@ -189,6 +186,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import axios from 'axios'
 import { fmtDate } from '../utils/date.js'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 
 const expenses = ref([])
 const users = ref([])

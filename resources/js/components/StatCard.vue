@@ -13,12 +13,11 @@ import { computed } from 'vue'
 const props = defineProps({
   label: String,
   value: [String, Number],
-  color: { type: String, default: 'gold' },
+  color: { type: String, default: 'blue' },
   icon:  String,
 })
 
 const valueColor = computed(() => ({
-  gold:   'text-gold-600',
   blue:   'text-blue-600',
   purple: 'text-purple-600',
   red:    'text-red-600',

@@ -24,7 +24,7 @@
         <h3 class="font-semibold text-gray-700 mb-4">Top Products (This Month)</h3>
         <ul class="space-y-3">
           <li v-for="(p, i) in data.top_products" :key="p.id" class="flex items-center gap-3">
-            <span class="w-6 h-6 rounded-full bg-gold-100 text-gold-700 flex items-center justify-center text-xs font-bold">{{ i+1 }}</span>
+            <span class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{{ i+1 }}</span>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-gray-800 truncate">{{ p.name }}</p>
               <p class="text-xs text-gray-400">{{ p.total_sold }} sold</p>
@@ -147,7 +147,7 @@ const loaded = ref(false)
 const stats = computed(() => [
   { label: 'Total Products',    value: data.value.totals?.products        ?? '—', color: 'blue',   icon: '📦' },
   { label: 'Customers',         value: data.value.totals?.customers       ?? '—', color: 'purple', icon: '👥' },
-  { label: "Today's Revenue",   value: 'LKR ' + Number(data.value.totals?.revenue_today   ?? 0).toLocaleString(), color: 'gold',  icon: '💰' },
+  { label: "Today's Revenue",   value: 'LKR ' + Number(data.value.totals?.revenue_today   ?? 0).toLocaleString(), color: 'green', icon: '💰' },
   { label: 'Low Stock Items',   value: data.value.totals?.low_stock_count ?? '—', color: 'red',    icon: '⚠️' },
 ])
 

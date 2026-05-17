@@ -11,28 +11,26 @@ class Product extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'branch_id', 'sku', 'barcode', 'name', 'description', 'category_id', 'material',
-        'weight', 'karat', 'making_charge_type', 'making_charge', 'wastage_percent',
-        'size', 'color', 'gemstone', 'gemstone_weight', 'gemstone_value', 'gemstone_quality',
+        'vehicle_type_id', 'brand_id', 'model_id', 'part_category_id', 'quality_type_id',
+        'supplier_id', 'branch_id', 'sku', 'barcode', 'name', 'description',
         'purchase_price', 'selling_price', 'stock_quantity',
-        'min_stock_level', 'image', 'image_public_id', 'is_active', 'supplier_id',
+        'min_stock_level', 'rack_location', 'is_active', 'image', 'image_public_id',
     ];
 
     protected $casts = [
         'is_active'      => 'boolean',
-        'weight'         => 'float',
         'purchase_price' => 'float',
         'selling_price'  => 'float',
     ];
 
-    public function category()
-    {
-        return $this->belongsTo(Category::class);
-    }
-
     public function supplier()
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function saleItems()
@@ -45,9 +43,29 @@ class Product extends Model
         return $this->hasMany(PurchaseItem::class);
     }
 
-    public function branch()
+    public function vehicleType()
     {
-        return $this->belongsTo(Branch::class);
+        return $this->belongsTo(VehicleType::class);
+    }
+
+    public function brand()
+    {
+        return $this->belongsTo(Brand::class);
+    }
+
+    public function model()
+    {
+        return $this->belongsTo(VehicleModel::class, 'model_id');
+    }
+
+    public function partCategory()
+    {
+        return $this->belongsTo(PartCategory::class);
+    }
+
+    public function qualityType()
+    {
+        return $this->belongsTo(QualityType::class);
     }
 
     public function getLowStockAttribute(): bool

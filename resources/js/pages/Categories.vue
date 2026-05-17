@@ -59,7 +59,7 @@
             <textarea v-model="form.description" rows="2" class="form-input"></textarea>
           </div>
           <label class="flex items-center gap-2 text-sm">
-            <input type="checkbox" v-model="form.is_active" class="rounded text-gold-600" /> Active
+            <input type="checkbox" v-model="form.is_active" class="rounded text-blue-600" /> Active
           </label>
           <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
         </div>

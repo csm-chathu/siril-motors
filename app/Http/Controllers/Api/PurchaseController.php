@@ -22,6 +22,11 @@ class PurchaseController extends Controller
             ->when(!$user->isAdmin(), fn($q) => $q->where('branch_id', $user->branch_id))
             ->when(request('search'), fn($q, $s) => $q->where('purchase_number', 'like', "%$s%"))
             ->when(request('supplier_id'), fn($q, $s) => $q->where('supplier_id', $s))
+            ->when(request('status'), fn($q, $s) => $q->where('status', $s))
+            ->when(request('statuses'), fn($q, $s) => $q->whereIn('status', (array) $s))
+            ->when(request('payment_method'), fn($q, $m) => $q->where('payment_method', $m))
+            ->when(request('date_from'), fn($q, $d) => $q->whereDate('purchased_at', '>=', $d))
+            ->when(request('date_to'), fn($q, $d) => $q->whereDate('purchased_at', '<=', $d))
             ->latest('purchased_at')
             ->paginate(request('per_page', 20));
         return response()->json($purchases);
@@ -30,47 +35,58 @@ class PurchaseController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'supplier_id' => 'required|exists:suppliers,id',
-            'items'       => 'required|array|min:1',
-            'items.*.product_id'         => 'nullable|exists:products,id',
+            'supplier_id'       => 'required|exists:suppliers,id',
+            'supplier_ref'      => 'nullable|string|max:100',
+            'expected_delivery' => 'nullable|date',
+            'items'             => 'required|array|min:1',
+            'items.*.product_id'                   => 'nullable|exists:products,id',
             'items.*.new_product.name'             => 'nullable|required_without:items.*.product_id|string|max:200',
-            'items.*.new_product.category_id'      => 'nullable|required_with:items.*.new_product.name|exists:categories,id',
-            'items.*.new_product.material'         => 'nullable|string|max:50',
-            'items.*.new_product.karat'            => 'nullable|string|max:10',
-            'items.*.new_product.weight'           => 'nullable|numeric|min:0',
+            'items.*.new_product.sku'              => 'nullable|string|max:100',
+            'items.*.new_product.part_category_id' => 'nullable|exists:part_categories,id',
+            'items.*.new_product.vehicle_type_id'  => 'nullable|exists:vehicle_types,id',
+            'items.*.new_product.brand_id'         => 'nullable|exists:brands,id',
+            'items.*.new_product.model_id'         => 'nullable|exists:vehicle_models,id',
+            'items.*.new_product.quality_type_id'  => 'nullable|exists:quality_types,id',
+            'items.*.new_product.rack_location'    => 'nullable|string|max:50',
+            'items.*.new_product.min_stock_level'  => 'nullable|integer|min:0',
             'items.*.new_product.image_url'        => 'nullable|url|max:1000',
             'items.*.new_product.image_public_id'  => 'nullable|string|max:255',
-            'items.*.quantity'      => 'required|integer|min:1',
-            'items.*.unit_cost'     => 'required|numeric|min:0',
-            'items.*.selling_price' => 'nullable|numeric|min:0',
-            'tax'         => 'nullable|numeric|min:0',
-            'status'      => 'required|in:pending,received,partial,cancelled',
+            'items.*.ordered_quantity'  => 'required|integer|min:1',
+            'items.*.received_quantity' => 'nullable|integer|min:0',
+            'items.*.unit_cost'         => 'required|numeric|min:0',
+            'items.*.selling_price'     => 'nullable|numeric|min:0',
+            'items.*.batch_number'      => 'nullable|string|max:100',
+            'items.*.expiry_date'       => 'nullable|date',
+            'tax'              => 'nullable|numeric|min:0',
+            'status'           => 'required|in:ordered,pending,received,partial,cancelled',
             'payment_method'   => 'nullable|in:cash,bank_transfer,cheque,credit',
             'cheque_number'    => 'nullable|required_if:payment_method,cheque|string|max:50',
             'cheque_date'      => 'nullable|required_if:payment_method,cheque|date',
             'cheque_bank_name' => 'nullable|required_if:payment_method,cheque|string|max:100',
-            'notes'       => 'nullable|string',
+            'notes'            => 'nullable|string',
         ]);
 
         DB::beginTransaction();
         try {
-            $subtotal = collect($data['items'])->sum(fn($i) => $i['unit_cost'] * $i['quantity']);
+            $subtotal = collect($data['items'])->sum(fn($i) => $i['unit_cost'] * $i['ordered_quantity']);
             $tax      = $data['tax'] ?? 0;
 
             $purchase = Purchase::create([
                 'branch_id'       => $request->user()->branch_id,
-                'purchase_number' => 'PO-' . now()->format('Ymd') . '-' . str_pad(Purchase::whereDate('created_at', today())->count() + 1, 4, '0', STR_PAD_LEFT),
-                'supplier_id'     => $data['supplier_id'],
-                'user_id'         => $request->user()->id,
-                'subtotal'        => $subtotal,
-                'tax'             => $tax,
-                'total'           => $subtotal + $tax,
-                'status'          => $data['status'],
-                'payment_method'  => $data['payment_method'] ?? 'cash',
-                'cheque_number'   => $data['cheque_number'] ?? null,
-                'cheque_date'     => $data['cheque_date'] ?? null,
-                'cheque_bank_name'=> $data['cheque_bank_name'] ?? null,
-                'notes'           => $data['notes'] ?? null,
+                'purchase_number'   => 'PO-' . now()->format('Ymd') . '-' . str_pad(Purchase::whereDate('created_at', today())->count() + 1, 4, '0', STR_PAD_LEFT),
+                'supplier_id'       => $data['supplier_id'],
+                'user_id'           => $request->user()->id,
+                'subtotal'          => $subtotal,
+                'tax'               => $tax,
+                'total'             => $subtotal + $tax,
+                'status'            => $data['status'],
+                'payment_method'    => $data['payment_method'] ?? 'cash',
+                'cheque_number'     => $data['cheque_number'] ?? null,
+                'cheque_date'       => $data['cheque_date'] ?? null,
+                'cheque_bank_name'  => $data['cheque_bank_name'] ?? null,
+                'notes'             => $data['notes'] ?? null,
+                'supplier_ref'      => $data['supplier_ref'] ?? null,
+                'expected_delivery' => $data['expected_delivery'] ?? null,
             ]);
 
             foreach ($data['items'] as $item) {
@@ -78,22 +94,25 @@ class PurchaseController extends Controller
                 if (empty($item['product_id'])) {
                     $np   = $item['new_product'];
                     $last = Product::withTrashed()->max('id') ?? 0;
+                    $sku  = !empty($np['sku']) ? $np['sku'] : str_pad($last + 1, 6, '0', STR_PAD_LEFT);
                     $product = Product::create([
-                        'branch_id'       => $request->user()->branch_id,
-                        'name'            => $np['name'],
-                        'category_id'     => $np['category_id'],
-                        'material'        => $np['material'] ?? null,
-                        'karat'           => $np['karat'] ?? null,
-                        'weight'          => $np['weight'] ?? null,
-                        'supplier_id'     => $data['supplier_id'],
-                        'sku'             => str_pad($last + 1, 6, '0', STR_PAD_LEFT),
-                        'purchase_price'  => $item['unit_cost'],
-                        'selling_price'   => $item['selling_price'] ?? 0,
-                        'stock_quantity'  => 0,
-                        'min_stock_level' => 1,
-                        'is_active'       => true,
-                        'image'           => $np['image_url'] ?? null,
-                        'image_public_id' => $np['image_public_id'] ?? null,
+                        'branch_id'        => $request->user()->branch_id,
+                        'name'             => $np['name'],
+                        'sku'              => $sku,
+                        'part_category_id' => $np['part_category_id'] ?? null,
+                        'vehicle_type_id'  => $np['vehicle_type_id']  ?? null,
+                        'brand_id'         => $np['brand_id']          ?? null,
+                        'model_id'         => $np['model_id']          ?? null,
+                        'quality_type_id'  => $np['quality_type_id']   ?? null,
+                        'rack_location'    => $np['rack_location']     ?? null,
+                        'supplier_id'      => $data['supplier_id'],
+                        'purchase_price'   => $item['unit_cost'],
+                        'selling_price'    => 0,
+                        'stock_quantity'   => 0,
+                        'min_stock_level'  => $np['min_stock_level'] ?? 1,
+                        'is_active'        => true,
+                        'image'            => $np['image_url']        ?? null,
+                        'image_public_id'  => $np['image_public_id']  ?? null,
                     ]);
                 } else {
                     $product = Product::findOrFail($item['product_id']);
@@ -102,16 +121,25 @@ class PurchaseController extends Controller
                     }
                 }
 
+                $orderedQty  = $item['ordered_quantity'];
+                $receivedQty = $item['received_quantity'] ?? $orderedQty;
+
                 PurchaseItem::create([
-                    'purchase_id'   => $purchase->id,
-                    'product_id'    => $product->id,
-                    'quantity'      => $item['quantity'],
-                    'unit_cost'     => $item['unit_cost'],
-                    'selling_price' => $item['selling_price'] ?? 0,
-                    'total'         => $item['unit_cost'] * $item['quantity'],
+                    'purchase_id'       => $purchase->id,
+                    'product_id'        => $product->id,
+                    'quantity'          => $orderedQty,
+                    'ordered_quantity'  => $orderedQty,
+                    'received_quantity' => $receivedQty,
+                    'unit_cost'         => $item['unit_cost'],
+                    'selling_price'     => $item['selling_price'] ?? 0,
+                    'total'             => $item['unit_cost'] * $orderedQty,
+                    'batch_number'      => $item['batch_number'] ?? null,
+                    'expiry_date'       => $item['expiry_date'] ?? null,
                 ]);
-                if ($data['status'] === 'received') {
-                    $product->increment('stock_quantity', $item['quantity']);
+
+                $stockQtyToAdd = in_array($data['status'], ['received', 'partial']) ? $receivedQty : 0;
+                if ($stockQtyToAdd > 0) {
+                    $product->increment('stock_quantity', $stockQtyToAdd);
                     $updates = ['purchase_price' => $item['unit_cost']];
                     if (!empty($item['selling_price'])) {
                         $updates['selling_price'] = $item['selling_price'];
@@ -120,8 +148,14 @@ class PurchaseController extends Controller
                 }
             }
 
-            if ($purchase->status === 'received') {
-                $entry = $this->postPurchaseJournal($purchase);
+            if (in_array($purchase->status, ['received', 'partial'])) {
+                // For partial GRN, journal only covers value of goods actually received
+                $receivedValue = collect($data['items'])->sum(function ($i) {
+                    $qty = $i['received_quantity'] ?? $i['ordered_quantity'];
+                    return $i['unit_cost'] * $qty;
+                }) + ($data['tax'] ?? 0);
+
+                $entry = $this->postPurchaseJournal($purchase, $receivedValue);
                 $purchase->update(['journal_entry_id' => $entry->id]);
             }
 
@@ -204,6 +238,17 @@ class PurchaseController extends Controller
         }
     }
 
+    public function cancel(Purchase $purchase)
+    {
+        $this->authorizeBranch($purchase->branch_id);
+        if (!in_array($purchase->status, ['ordered', 'pending'])) {
+            return response()->json(['message' => 'Only ordered or pending POs can be cancelled.'], 422);
+        }
+        $purchase->update(['status' => 'cancelled']);
+        AuditLog::record('purchase_cancelled', "Purchase {$purchase->purchase_number} cancelled", $purchase);
+        return response()->json($purchase->fresh());
+    }
+
     public function destroy(Purchase $purchase)
     {
         $this->authorizeBranch($purchase->branch_id);
@@ -219,28 +264,31 @@ class PurchaseController extends Controller
         }
     }
 
-    private function postPurchaseJournal(Purchase $purchase): JournalEntry
+    private function postPurchaseJournal(Purchase $purchase, ?float $journalAmount = null): JournalEntry
     {
+        $amount    = round($journalAmount ?? $purchase->total, 2);
         $inventory = Account::where('code', '1200')->first();
-        $ap = Account::where('code', '2000')->first();
+        $ap        = Account::where('code', '2000')->first();
         $paymentAccount = $this->paymentAccountByMethod($purchase->payment_method);
 
         if (!$inventory) {
             throw new \Exception('Inventory account (1200) not found.');
         }
-
         if ($purchase->payment_method === 'credit' && !$ap) {
             throw new \Exception('Accounts payable account (2000) not found for credit purchase.');
         }
-
-        if ($purchase->payment_method !== 'credit' && $purchase->payment_method !== 'cheque' && !$paymentAccount) {
+        if (!in_array($purchase->payment_method, ['credit', 'cheque']) && !$paymentAccount) {
             throw new \Exception('Payment account not found for purchase payment method.');
         }
+
+        $statusNote = $purchase->status === 'partial'
+            ? ' (Partial GRN)'
+            : '';
 
         $entry = JournalEntry::create([
             'entry_number'   => $this->nextEntryNumber(),
             'entry_date'     => $purchase->purchased_at ?? now(),
-            'description'    => "Purchase {$purchase->purchase_number}",
+            'description'    => "Purchase {$purchase->purchase_number}{$statusNote}",
             'reference_type' => 'Purchase',
             'reference_id'   => $purchase->id,
             'branch_id'      => $purchase->branch_id,
@@ -248,20 +296,25 @@ class PurchaseController extends Controller
             'status'         => 'posted',
         ]);
 
+        // Dr Inventory — goods received into stock
         JournalEntryLine::create([
             'journal_entry_id' => $entry->id,
             'account_id'       => $inventory->id,
-            'debit'            => $purchase->total,
+            'debit'            => $amount,
             'credit'           => 0,
-            'description'      => 'Inventory purchased',
+            'description'      => 'Inventory received' . $statusNote,
         ]);
+
+        // Cr Cash / Bank / Cheques Payable / Accounts Payable
+        $creditAccountId = ($purchase->payment_method === 'credit') ? $ap->id : $paymentAccount->id;
+        $creditDesc      = ($purchase->payment_method === 'credit') ? 'Supplier payable recorded' : 'Purchase paid';
 
         JournalEntryLine::create([
             'journal_entry_id' => $entry->id,
-            'account_id'       => $purchase->payment_method === 'credit' ? $ap->id : $paymentAccount->id,
+            'account_id'       => $creditAccountId,
             'debit'            => 0,
-            'credit'           => $purchase->total,
-            'description'      => $purchase->payment_method === 'credit' ? 'Supplier payable recorded' : 'Purchase paid',
+            'credit'           => $amount,
+            'description'      => $creditDesc,
         ]);
 
         return $entry;

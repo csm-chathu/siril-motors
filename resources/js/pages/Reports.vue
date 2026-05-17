@@ -1,482 +1,811 @@
 <template>
-  <div class="flex gap-0 h-full">
+  <div class="space-y-6">
+    <!-- Header + date filters -->
+    <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+      <div>
+        <h2 class="text-xl font-semibold text-gray-800">Reports</h2>
+        <p class="text-sm text-gray-500 mt-0.5">Business insights and summaries</p>
+      </div>
+      <div class="sm:ml-auto flex flex-wrap items-end gap-2">
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">From</label>
+          <input type="date" v-model="dateFrom" class="form-input text-sm py-1.5" />
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">To</label>
+          <input type="date" v-model="dateTo" class="form-input text-sm py-1.5" />
+        </div>
+        <button @click="applyDates" class="btn-primary text-sm py-1.5 px-4">Apply</button>
+        <button @click="printReport" class="btn-secondary text-sm py-1.5 px-3 flex items-center gap-1">
+          <PrinterIcon class="w-4 h-4" /> Print
+        </button>
+      </div>
+    </div>
 
-    <!-- ── Sidebar ── -->
-    <aside class="w-52 shrink-0 border-r border-gray-200 pr-2 space-y-0.5">
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-1 pb-2">Reports</p>
-      <button v-for="r in reportList" :key="r.key"
-        @click="switchReport(r.key)"
-        :class="active === r.key
-          ? 'bg-gold-50 text-gold-700 font-semibold border-r-2 border-gold-500'
-          : 'text-gray-600 hover:bg-gray-50'"
-        class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors">
-        <span>{{ r.icon }}</span>{{ r.label }}
+    <!-- Quick range pills -->
+    <div class="flex gap-2 flex-wrap">
+      <button v-for="r in quickRanges" :key="r.label"
+        @click="setQuickRange(r)"
+        class="px-3 py-1 rounded-full text-xs font-medium border transition-colors"
+        :class="activeRange === r.label
+          ? 'bg-blue-600 text-white border-blue-600'
+          : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'">
+        {{ r.label }}
       </button>
-    </aside>
+    </div>
 
-    <!-- ── Main content ── -->
-    <div class="flex-1 pl-6 min-w-0 space-y-4">
-
-      <!-- Export bar -->
-      <div class="flex items-center justify-between flex-wrap gap-2">
-        <h3 class="font-semibold text-gray-800 text-base">{{ currentReport.label }}</h3>
-        <div class="flex items-center gap-2">
-          <button @click="doCSV"   class="btn-secondary text-xs flex items-center gap-1.5">⬇ CSV</button>
-          <button @click="doPrint" class="btn-secondary text-xs flex items-center gap-1.5">🖨 Print / PDF</button>
-        </div>
-      </div>
-
-      <!-- ── Date filter bar (shared) ── -->
-      <div v-if="currentReport.hasDateFilter" class="card flex gap-4 items-end flex-wrap py-3">
-        <div>
-          <label class="form-label">From</label>
-          <input v-model="dateFrom" type="date" class="form-input" />
-        </div>
-        <div>
-          <label class="form-label">To</label>
-          <input v-model="dateTo" type="date" class="form-input" />
-        </div>
-        <button @click="generate" :disabled="loading" class="btn-primary">
-          {{ loading ? 'Loading…' : 'Generate' }}
+    <!-- Tabs -->
+    <div class="border-b border-gray-200">
+      <nav class="flex gap-1 overflow-x-auto">
+        <button v-for="tab in tabs" :key="tab.id"
+          @click="activeTab = tab.id; loadTab(tab.id)"
+          class="px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5"
+          :class="activeTab === tab.id
+            ? 'border-blue-600 text-blue-700'
+            : 'border-transparent text-gray-500 hover:text-gray-700'">
+          <component :is="tab.icon" class="w-4 h-4" />
+          {{ tab.label }}
         </button>
-      </div>
+      </nav>
+    </div>
 
-      <!-- ── Gold Loans filter ── -->
-      <div v-if="active === 'loans'" class="card flex gap-4 items-end flex-wrap py-3">
-        <div>
-          <label class="form-label">Status</label>
-          <select v-model="loanStatus" class="form-input w-40">
-            <option value="all">All</option>
-            <option value="active">Active</option>
-            <option value="overdue">Overdue</option>
-            <option value="closed">Closed</option>
-          </select>
+    <!-- ── SALES REPORT ── -->
+    <div v-if="activeTab === 'sales'" class="space-y-4">
+      <div v-if="loading.sales" class="py-16 text-center text-gray-400">Loading…</div>
+      <template v-else-if="sales">
+        <!-- Summary cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Invoices</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">{{ sales.totals?.count ?? 0 }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Total Revenue</p>
+            <p class="text-2xl font-bold text-emerald-600 mt-1">{{ fmt(sales.totals?.total_revenue) }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Collected</p>
+            <p class="text-2xl font-bold text-blue-600 mt-1">{{ fmt(sales.totals?.amount_paid) }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Outstanding</p>
+            <p class="text-2xl font-bold text-orange-500 mt-1">{{ fmt(sales.totals?.outstanding) }}</p>
+          </div>
         </div>
-        <button @click="generate" :disabled="loading" class="btn-primary">
-          {{ loading ? 'Loading…' : 'Generate' }}
-        </button>
-      </div>
 
-      <div v-if="loading" class="card text-center text-gray-400 py-12">Loading…</div>
-      <div v-else-if="!data" class="card text-center text-gray-400 py-12">
-        Click Generate to load this report.
-      </div>
-
-      <!-- ══════════ SALES ══════════ -->
-      <template v-else-if="active === 'sales'">
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatTile label="Transactions"    :value="data.totals.count" plain :sub="'LKR ' + lkr(data.totals.total_revenue)" />
-          <StatTile label="Total Revenue"   :value="lkr(data.totals.total_revenue)" />
-          <StatTile label="Amount Paid"     :value="lkr(data.totals.amount_paid)" color="green" />
-          <StatTile label="Outstanding"     :value="lkr(data.totals.outstanding)" color="red" />
-          <StatTile label="Gold Value"      :value="lkr(data.totals.gold_value)" color="gold" />
-          <StatTile label="Making Charges"  :value="lkr(data.totals.making_charges)" color="blue" />
-          <StatTile label="Total Tax"       :value="lkr(data.totals.total_tax)" />
-          <StatTile label="Total Discounts" :value="lkr(data.totals.total_discount)" />
+        <!-- Breakdown row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- By payment method -->
+          <div class="card">
+            <h4 class="text-sm font-semibold text-gray-700 mb-3">By Payment Method</h4>
+            <div class="space-y-2">
+              <div v-for="r in sales.by_payment_method" :key="r.method" class="flex items-center justify-between text-sm">
+                <span class="capitalize text-gray-600">{{ r.method ?? 'Unknown' }}</span>
+                <div class="flex items-center gap-4">
+                  <span class="text-gray-400 text-xs">{{ r.count }} invoices</span>
+                  <span class="font-medium text-gray-800">{{ fmt(r.total) }}</span>
+                </div>
+              </div>
+              <p v-if="!sales.by_payment_method?.length" class="text-gray-400 text-xs">No data</p>
+            </div>
+          </div>
+          <!-- By status -->
+          <div class="card">
+            <h4 class="text-sm font-semibold text-gray-700 mb-3">By Payment Status</h4>
+            <div class="space-y-2">
+              <div v-for="r in sales.by_status" :key="r.status" class="flex items-center justify-between text-sm">
+                <span class="capitalize px-2 py-0.5 rounded-full text-xs font-medium"
+                  :class="statusClass(r.status)">{{ r.status }}</span>
+                <div class="flex items-center gap-4">
+                  <span class="text-gray-400 text-xs">{{ r.count }}</span>
+                  <span class="font-medium text-gray-800">{{ fmt(r.total) }}</span>
+                </div>
+              </div>
+              <p v-if="!sales.by_status?.length" class="text-gray-400 text-xs">No data</p>
+            </div>
+          </div>
         </div>
-        <ReportTable :headers="['Invoice','Customer','Date','Total','Paid','Discount','Tax','Method','Type']"
-          :rows="data.rows.map(r => [r.invoice_number, r.customer?.name ?? '—', fmt(r.created_at),
-            lkr(r.total), lkr(r.amount_paid), lkr(r.discount), lkr(r.tax), r.payment_method, r.sale_type])" />
-      </template>
 
-      <!-- ══════════ PURCHASES ══════════ -->
-      <template v-else-if="active === 'purchases'">
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatTile label="Transactions" :value="data.totals.count" plain :sub="'LKR ' + lkr(data.totals.total)" />
-          <StatTile label="Subtotal"     :value="lkr(data.totals.subtotal)" />
-          <StatTile label="Tax"          :value="lkr(data.totals.total_tax)" />
-          <StatTile label="Total Cost"   :value="lkr(data.totals.total)" color="gold" />
-        </div>
-        <ReportTable :headers="['Purchase #','Supplier','Date','Subtotal','Tax','Total','Status','Method']"
-          :rows="data.rows.map(r => [r.purchase_number, r.supplier?.name ?? '—', fmt(r.purchased_at),
-            lkr(r.subtotal), lkr(r.tax), lkr(r.total), r.status, r.payment_method])" />
-      </template>
-
-      <!-- ══════════ GOLD RATE HISTORY ══════════ -->
-      <template v-else-if="active === 'gold-rates'">
-        <div class="card p-0 overflow-hidden overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b">
-              <tr>
-                <th class="table-th">Date</th>
-                <th v-for="c in data.carats" :key="c" class="table-th">{{ c }} (LKR/g)</th>
-                <th class="table-th">Set By</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr v-for="row in data.rows" :key="row.date" class="hover:bg-gray-50">
-                <td class="table-td font-medium">{{ formatDate(row.date) }}</td>
-                <td v-for="c in data.carats" :key="c" class="table-td text-gold-700 font-mono">
-                  {{ row[c.toLowerCase()] ? lkr(row[c.toLowerCase()]) : '—' }}
-                </td>
-                <td class="table-td text-gray-400 text-xs">{{ row.set_by }}</td>
-              </tr>
-              <tr v-if="!data.rows.length">
-                <td :colspan="data.carats.length + 2" class="table-td text-center text-gray-400 py-8">No data</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
-
-      <!-- ══════════ OLD GOLD / BUYBACKS ══════════ -->
-      <template v-else-if="active === 'buybacks'">
-        <div class="grid grid-cols-3 gap-3">
-          <StatTile label="Transactions"  :value="data.totals.count" plain :sub="'LKR ' + lkr(data.totals.total_paid)" />
-          <StatTile label="Total Weight"  :value="(+data.totals.total_weight).toFixed(3) + 'g'" plain />
-          <StatTile label="Total Paid"    :value="lkr(data.totals.total_paid)" color="gold" />
-        </div>
-        <ReportTable :headers="['Buyback #','Customer','Karat','Weight (g)','Market Rate','Buy Rate','Final Price','Status','Method','Date']"
-          :rows="data.rows.map(r => [r.buyback_number, r.customer?.name ?? '—', r.declared_karat,
-            r.net_weight, lkr(r.rate_per_gram), lkr(r.buying_price_per_gram), lkr(r.final_price),
-            r.status, r.payment_method, fmt(r.created_at)])" />
-      </template>
-
-      <!-- ══════════ SALARY PAYMENTS ══════════ -->
-      <template v-else-if="active === 'salary'">
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatTile label="Payments"        :value="data.totals.count" plain :sub="'LKR ' + lkr(data.totals.total_net)" />
-          <StatTile label="Total Basic"     :value="lkr(data.totals.total_basic)" />
-          <StatTile label="Total Allowances":value="lkr(data.totals.total_allowances)" color="green" />
-          <StatTile label="Total Deductions":value="lkr(data.totals.total_deductions)" color="red" />
-          <StatTile label="Net Paid"        :value="lkr(data.totals.total_net)" color="gold" class="col-span-2" />
-        </div>
-        <ReportTable :headers="['Payment #','Employee','Position','Period','Payment Date','Basic','Allowances','Deductions','Net','Method','Status']"
-          :rows="data.rows.map(r => [r.payment_number, r.employee?.name ?? '—', r.employee?.designation ?? '—',
-            fmt(r.period_from) + ' → ' + fmt(r.period_to), fmt(r.payment_date),
-            lkr(r.basic_salary), lkr(r.allowances), lkr(r.deductions), lkr(r.net_salary), r.payment_method, r.status])" />
-      </template>
-
-      <!-- ══════════ EXPENSES ══════════ -->
-      <template v-else-if="active === 'expenses'">
-        <div class="grid grid-cols-2 gap-3">
-          <StatTile label="Total Expenses" :value="data.totals.count" plain :sub="'LKR ' + lkr(data.totals.total_amount)" />
-          <StatTile label="Total Amount"   :value="lkr(data.totals.total_amount)" color="red" />
-        </div>
-        <!-- By category summary -->
+        <!-- Detail table -->
         <div class="card p-0 overflow-hidden">
-          <div class="px-4 py-3 border-b bg-gray-50">
-            <p class="text-sm font-semibold text-gray-700">By Category</p>
+          <div class="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+            <h4 class="font-semibold text-gray-700 text-sm">Invoice Detail</h4>
+            <button @click="exportCsv('sales')" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              <ArrowDownTrayIcon class="w-3.5 h-3.5" /> Export CSV
+            </button>
           </div>
-          <div class="divide-y divide-gray-100">
-            <div v-for="cat in data.by_category" :key="cat.category"
-              class="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50">
-              <span class="text-sm text-gray-700 capitalize">{{ cat.category.replace('_',' ') }}</span>
-              <div class="text-right">
-                <span class="text-sm font-semibold text-red-600">LKR {{ lkr(cat.total) }}</span>
-                <span class="text-xs text-gray-400 ml-2">({{ cat.count }} entries)</span>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="table-th">Invoice</th>
+                  <th class="table-th">Customer</th>
+                  <th class="table-th">Vehicle</th>
+                  <th class="table-th">Date</th>
+                  <th class="table-th">Method</th>
+                  <th class="table-th">Status</th>
+                  <th class="table-th text-right">Total</th>
+                  <th class="table-th text-right">Paid</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-if="!sales.rows?.length">
+                  <td colspan="8" class="table-td text-center text-gray-400">No sales in this period</td>
+                </tr>
+                <tr v-for="r in sales.rows" :key="r.id" class="hover:bg-gray-50">
+                  <td class="table-td font-mono text-xs">
+                    <RouterLink :to="`/sales/${r.id}`" class="text-blue-600 hover:underline">{{ r.invoice_number }}</RouterLink>
+                  </td>
+                  <td class="table-td">{{ r.customer?.name ?? '—' }}</td>
+                  <td class="table-td font-mono text-xs text-gray-500">{{ r.customer?.vehicle_number ?? '—' }}</td>
+                  <td class="table-td text-gray-500 text-xs">{{ fmtDate(r.sold_at) }}</td>
+                  <td class="table-td capitalize text-xs">{{ r.payment_method ?? '—' }}</td>
+                  <td class="table-td">
+                    <span class="px-1.5 py-0.5 rounded text-xs font-medium" :class="statusClass(r.payment_status)">{{ r.payment_status }}</span>
+                  </td>
+                  <td class="table-td text-right font-medium">{{ fmt(r.total) }}</td>
+                  <td class="table-td text-right text-emerald-600">{{ fmt(r.amount_paid) }}</td>
+                </tr>
+              </tbody>
+              <tfoot class="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                <tr>
+                  <td colspan="6" class="table-td text-right text-gray-600">Totals</td>
+                  <td class="table-td text-right">{{ fmt(sales.totals?.total_revenue) }}</td>
+                  <td class="table-td text-right text-emerald-600">{{ fmt(sales.totals?.amount_paid) }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- ── PURCHASES REPORT ── -->
+    <div v-if="activeTab === 'purchases'" class="space-y-4">
+      <div v-if="loading.purchases" class="py-16 text-center text-gray-400">Loading…</div>
+      <template v-else-if="purchases">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Orders</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">{{ purchases.totals?.count ?? 0 }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Subtotal</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">{{ fmt(purchases.totals?.subtotal) }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Tax</p>
+            <p class="text-2xl font-bold text-orange-500 mt-1">{{ fmt(purchases.totals?.total_tax) }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Total Paid</p>
+            <p class="text-2xl font-bold text-blue-600 mt-1">{{ fmt(purchases.totals?.total) }}</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="card">
+            <h4 class="text-sm font-semibold text-gray-700 mb-3">By Supplier</h4>
+            <div class="space-y-2">
+              <div v-for="r in purchases.by_supplier" :key="r.supplier" class="flex items-center justify-between text-sm">
+                <span class="text-gray-600 truncate">{{ r.supplier }}</span>
+                <div class="flex items-center gap-4 flex-shrink-0">
+                  <span class="text-gray-400 text-xs">{{ r.count }} orders</span>
+                  <span class="font-medium text-gray-800">{{ fmt(r.total) }}</span>
+                </div>
               </div>
+              <p v-if="!purchases.by_supplier?.length" class="text-gray-400 text-xs">No data</p>
+            </div>
+          </div>
+          <div class="card">
+            <h4 class="text-sm font-semibold text-gray-700 mb-3">By Status</h4>
+            <div class="space-y-2">
+              <div v-for="r in purchases.by_status" :key="r.status" class="flex items-center justify-between text-sm">
+                <span class="capitalize text-gray-600">{{ r.status }}</span>
+                <div class="flex items-center gap-4">
+                  <span class="text-gray-400 text-xs">{{ r.count }}</span>
+                  <span class="font-medium">{{ fmt(r.total) }}</span>
+                </div>
+              </div>
+              <p v-if="!purchases.by_status?.length" class="text-gray-400 text-xs">No data</p>
             </div>
           </div>
         </div>
-        <ReportTable :headers="['Date','Category','Description','Amount','Method','Ref #','Paid By']"
-          :rows="data.rows.map(r => [fmt(r.expense_date), r.category, r.description,
-            lkr(r.amount), r.payment_method, r.reference_number ?? '—', r.paid_by_user?.name ?? '—'])" />
-      </template>
 
-      <!-- ══════════ GOLD LOANS ══════════ -->
-      <template v-else-if="active === 'loans'">
-        <div class="grid grid-cols-3 gap-3">
-          <StatTile label="Total Loans"   :value="data.summary.total" plain :sub="'LKR ' + lkr(data.summary.total_loaned)" />
-          <StatTile label="Active"        :value="data.summary.active" color="blue" plain />
-          <StatTile label="Overdue"       :value="data.summary.overdue" color="red" plain />
-          <StatTile label="Closed"        :value="data.summary.closed" plain />
-          <StatTile label="Total Loaned"  :value="lkr(data.summary.total_loaned)" color="gold" />
-          <StatTile label="Outstanding"   :value="lkr(data.summary.total_outstanding)" color="red" />
-        </div>
-        <ReportTable :headers="['Loan #','Customer','Phone','Karat','Weight (g)','Loan Amount','Outstanding','Interest %','Disbursed','Maturity','Status']"
-          :rows="data.rows.map(r => [r.loan_number, r.customer?.name ?? '—', r.customer?.phone ?? '—',
-            r.declared_karat, r.net_weight, lkr(r.loan_amount), lkr(r.outstanding_principal),
-            r.interest_rate_monthly + '%', fmt(r.disbursed_date), fmt(r.maturity_date), r.status])" />
-      </template>
-
-      <!-- ══════════ METAL BALANCE ══════════ -->
-      <template v-else-if="active === 'metal'">
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatTile label="Total Weight"  :value="data.totals.total_weight_g + 'g'" plain />
-          <StatTile label="Gold Value"    :value="data.totals.gold_value_lkr ? lkr(data.totals.gold_value_lkr) : '—'" color="gold" />
-          <StatTile label="Cost Value"    :value="lkr(data.totals.cost_value_lkr)" />
-          <StatTile label="Sell Value"    :value="lkr(data.totals.sell_value_lkr)" color="green" />
-        </div>
-        <div v-if="data.gold_rate" class="text-xs text-gold-700 bg-gold-50 border border-gold-200 rounded-lg px-3 py-2">
-          Based on today's rate: <strong>LKR {{ lkr(data.gold_rate.rate_per_gram) }}/g</strong> · {{ data.date }}
-        </div>
-        <ReportTable :headers="['Karat','Purity','Pieces','Weight (g)','Gold Value','Cost Value','Sell Value']"
-          :rows="data.by_karat.map(r => [r.karat?.toUpperCase(), r.purity + '%', r.piece_count,
-            r.total_weight_g + 'g', r.gold_value_lkr ? lkr(r.gold_value_lkr) : '—',
-            lkr(r.cost_value_lkr), lkr(r.sell_value_lkr)])" />
-      </template>
-
-      <!-- ══════════ RATE P&L ══════════ -->
-      <template v-else-if="active === 'pnl'">
-        <div class="grid grid-cols-2 gap-3">
-          <StatTile label="Total Unrealized P&L"
-            :value="(data.total_unrealized_pnl >= 0 ? '+' : '') + 'LKR ' + lkr(data.total_unrealized_pnl)"
-            :color="data.total_unrealized_pnl >= 0 ? 'green' : 'red'" plain />
-          <StatTile v-if="data.gold_rate" label="24K Rate Today"
-            :value="'LKR ' + lkr(data.gold_rate.rate_per_gram) + '/g'" color="gold" plain />
-        </div>
-        <ReportTable :headers="['Product','Karat','Weight','Stock','Cost/Unit','Gold Value Now','P&L/Unit','Total P&L']"
-          :rows="data.products.map(r => [r.name, r.karat, r.weight_g + 'g', r.stock,
-            lkr(r.cost_per_unit), lkr(r.gold_value_now),
-            (r.gold_value_now - r.cost_per_unit >= 0 ? '+' : '') + lkr(r.gold_value_now - r.cost_per_unit),
-            (r.unrealized_pnl >= 0 ? '+' : '') + lkr(r.unrealized_pnl)])" />
-      </template>
-
-      <!-- ══════════ TAX SETTINGS ══════════ -->
-      <template v-else-if="active === 'tax'">
-        <div class="flex justify-end">
-          <button @click="openTaxModal(null)" class="btn-primary text-sm">+ Add Tax</button>
-        </div>
-        <ReportTable :headers="['Name','Rate (%)','Applies To','Status','Description']"
-          :rows="taxList.map(t => [t.name, t.rate + '%', t.applies_to, t.is_active ? 'Active' : 'Inactive', t.description ?? '—'])" />
-
-        <!-- Tax modal -->
-        <div v-if="showTaxModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div class="flex items-center justify-between px-6 py-4 border-b">
-              <h3 class="font-semibold">{{ editingTax ? 'Edit Tax' : 'Add Tax Setting' }}</h3>
-              <button @click="showTaxModal = false" class="text-gray-400 hover:text-gray-600">✕</button>
-            </div>
-            <form @submit.prevent="saveTax" class="p-6 space-y-4">
-              <div>
-                <label class="form-label">Name *</label>
-                <input v-model="taxForm.name" required class="form-input" placeholder="e.g. VAT, GST" />
-              </div>
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="form-label">Rate (%) *</label>
-                  <input v-model.number="taxForm.rate" type="number" min="0" max="100" step="0.01" required class="form-input" />
-                </div>
-                <div>
-                  <label class="form-label">Applies To *</label>
-                  <select v-model="taxForm.applies_to" required class="form-input">
-                    <option value="all">All</option>
-                    <option value="gold_only">Gold Only</option>
-                    <option value="gemstone_only">Gemstone Only</option>
-                    <option value="making_charges">Making Charges</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label class="form-label">Description</label>
-                <input v-model="taxForm.description" class="form-input" />
-              </div>
-              <label class="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" v-model="taxForm.is_active" class="w-4 h-4 rounded" />
-                <span class="text-sm font-medium text-gray-700">Active (available at POS)</span>
-              </label>
-              <p v-if="taxError" class="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{{ taxError }}</p>
-              <div class="flex gap-3">
-                <button type="button" @click="showTaxModal = false" class="btn-secondary flex-1">Cancel</button>
-                <button type="submit" :disabled="taxSaving" class="btn-primary flex-1">
-                  {{ taxSaving ? 'Saving…' : 'Save' }}
-                </button>
-              </div>
-            </form>
+        <div class="card p-0 overflow-hidden">
+          <div class="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+            <h4 class="font-semibold text-gray-700 text-sm">Purchase Detail</h4>
+            <button @click="exportCsv('purchases')" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              <ArrowDownTrayIcon class="w-3.5 h-3.5" /> Export CSV
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="table-th">PO Number</th>
+                  <th class="table-th">Supplier</th>
+                  <th class="table-th">Date</th>
+                  <th class="table-th">Method</th>
+                  <th class="table-th">Status</th>
+                  <th class="table-th text-right">Subtotal</th>
+                  <th class="table-th text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-if="!purchases.rows?.length">
+                  <td colspan="7" class="table-td text-center text-gray-400">No purchases in this period</td>
+                </tr>
+                <tr v-for="r in purchases.rows" :key="r.id" class="hover:bg-gray-50">
+                  <td class="table-td font-mono text-xs">{{ r.purchase_number }}</td>
+                  <td class="table-td">{{ r.supplier?.name ?? '—' }}</td>
+                  <td class="table-td text-gray-500 text-xs">{{ fmtDate(r.purchased_at) }}</td>
+                  <td class="table-td capitalize text-xs">{{ r.payment_method ?? '—' }}</td>
+                  <td class="table-td capitalize text-xs">{{ r.status }}</td>
+                  <td class="table-td text-right">{{ fmt(r.subtotal) }}</td>
+                  <td class="table-td text-right font-medium">{{ fmt(r.total) }}</td>
+                </tr>
+              </tbody>
+              <tfoot class="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                <tr>
+                  <td colspan="5" class="table-td text-right text-gray-600">Totals</td>
+                  <td class="table-td text-right">{{ fmt(purchases.totals?.subtotal) }}</td>
+                  <td class="table-td text-right">{{ fmt(purchases.totals?.total) }}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </div>
       </template>
+    </div>
 
+    <!-- ── INVENTORY REPORT ── -->
+    <div v-if="activeTab === 'inventory'" class="space-y-4">
+      <div v-if="loading.inventory" class="py-16 text-center text-gray-400">Loading…</div>
+      <template v-else-if="inventory">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Products</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">{{ inventory.totals?.total_products ?? 0 }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Stock Cost Value</p>
+            <p class="text-2xl font-bold text-blue-600 mt-1">{{ fmt(inventory.totals?.total_stock_value) }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Stock Sell Value</p>
+            <p class="text-2xl font-bold text-emerald-600 mt-1">{{ fmt(inventory.totals?.total_sell_value) }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Low Stock</p>
+            <p class="text-2xl font-bold text-orange-500 mt-1">{{ inventory.totals?.low_stock_count ?? 0 }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Out of Stock</p>
+            <p class="text-2xl font-bold text-red-500 mt-1">{{ inventory.totals?.out_of_stock ?? 0 }}</p>
+          </div>
+        </div>
+
+        <!-- By category breakdown -->
+        <div class="card">
+          <h4 class="text-sm font-semibold text-gray-700 mb-3">Stock Value by Category</h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="table-th">Category</th>
+                  <th class="table-th text-right">Products</th>
+                  <th class="table-th text-right">Cost Value</th>
+                  <th class="table-th text-right">Sell Value</th>
+                  <th class="table-th text-right">Margin</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="r in inventory.by_category" :key="r.category" class="hover:bg-gray-50">
+                  <td class="table-td font-medium">{{ r.category }}</td>
+                  <td class="table-td text-right text-gray-500">{{ r.count }}</td>
+                  <td class="table-td text-right">{{ fmt(r.stock_value) }}</td>
+                  <td class="table-td text-right text-emerald-600">{{ fmt(r.sell_value) }}</td>
+                  <td class="table-td text-right text-blue-600">
+                    {{ r.stock_value > 0 ? '+' + Math.round(((r.sell_value - r.stock_value) / r.stock_value) * 100) + '%' : '—' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Full product list -->
+        <div class="card p-0 overflow-hidden">
+          <div class="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+            <h4 class="font-semibold text-gray-700 text-sm">All Products</h4>
+            <button @click="exportCsv('inventory')" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              <ArrowDownTrayIcon class="w-3.5 h-3.5" /> Export CSV
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="table-th">SKU</th>
+                  <th class="table-th">Name</th>
+                  <th class="table-th">Category</th>
+                  <th class="table-th">Brand</th>
+                  <th class="table-th text-right">Stock</th>
+                  <th class="table-th text-right">Min</th>
+                  <th class="table-th text-right">Cost Price</th>
+                  <th class="table-th text-right">Sell Price</th>
+                  <th class="table-th text-right">Stock Value</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-if="!inventory.products?.length">
+                  <td colspan="9" class="table-td text-center text-gray-400">No products</td>
+                </tr>
+                <tr v-for="p in inventory.products" :key="p.id" class="hover:bg-gray-50"
+                  :class="{ 'bg-red-50': p.stock_quantity === 0, 'bg-orange-50': p.stock_quantity > 0 && p.stock_quantity <= p.min_stock_level }">
+                  <td class="table-td font-mono text-xs">{{ p.sku }}</td>
+                  <td class="table-td font-medium">{{ p.name }}</td>
+                  <td class="table-td text-xs text-gray-500">{{ p.part_category?.name ?? '—' }}</td>
+                  <td class="table-td text-xs text-gray-500">{{ p.brand?.name ?? '—' }}</td>
+                  <td class="table-td text-right font-mono"
+                    :class="p.stock_quantity === 0 ? 'text-red-600 font-bold' : p.stock_quantity <= p.min_stock_level ? 'text-orange-600 font-bold' : ''">
+                    {{ p.stock_quantity }}
+                  </td>
+                  <td class="table-td text-right text-gray-400 font-mono">{{ p.min_stock_level }}</td>
+                  <td class="table-td text-right">{{ fmt(p.purchase_price) }}</td>
+                  <td class="table-td text-right text-emerald-600">{{ fmt(p.selling_price) }}</td>
+                  <td class="table-td text-right font-medium">{{ fmt(p.purchase_price * p.stock_quantity) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- ── TOP PRODUCTS REPORT ── -->
+    <div v-if="activeTab === 'top-products'" class="space-y-4">
+      <div v-if="loading['top-products']" class="py-16 text-center text-gray-400">Loading…</div>
+      <template v-else-if="topProducts">
+        <div class="card p-0 overflow-hidden">
+          <div class="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+            <h4 class="font-semibold text-gray-700 text-sm">Top Selling Parts — {{ fmtDate(topProducts.from) }} to {{ fmtDate(topProducts.to) }}</h4>
+            <button @click="exportCsv('top-products')" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              <ArrowDownTrayIcon class="w-3.5 h-3.5" /> Export CSV
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="table-th w-8">#</th>
+                  <th class="table-th">SKU</th>
+                  <th class="table-th">Part Name</th>
+                  <th class="table-th">Category</th>
+                  <th class="table-th text-right">Qty Sold</th>
+                  <th class="table-th text-right">Avg Price</th>
+                  <th class="table-th text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-if="!topProducts.rows?.length">
+                  <td colspan="7" class="table-td text-center text-gray-400">No sales data in this period</td>
+                </tr>
+                <tr v-for="(r, i) in topProducts.rows" :key="r.id" class="hover:bg-gray-50">
+                  <td class="table-td text-gray-400 font-mono text-xs">{{ i + 1 }}</td>
+                  <td class="table-td font-mono text-xs text-gray-500">{{ r.sku }}</td>
+                  <td class="table-td font-medium">{{ r.name }}</td>
+                  <td class="table-td text-xs text-gray-500">{{ r.category ?? '—' }}</td>
+                  <td class="table-td text-right font-bold text-blue-600">{{ r.qty_sold }}</td>
+                  <td class="table-td text-right text-gray-600">{{ fmt(r.avg_price) }}</td>
+                  <td class="table-td text-right font-medium text-emerald-600">{{ fmt(r.revenue) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- ── PROFIT & LOSS ── -->
+    <div v-if="activeTab === 'profit-loss'" class="space-y-4">
+      <div v-if="loading['profit-loss']" class="py-16 text-center text-gray-400">Loading…</div>
+      <template v-else-if="profitLoss">
+        <!-- P&L Summary -->
+        <div class="card max-w-lg">
+          <h4 class="font-semibold text-gray-700 mb-4">Profit & Loss — {{ fmtDate(profitLoss.from) }} to {{ fmtDate(profitLoss.to) }}</h4>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+              <span class="text-gray-600">Parts Revenue</span>
+              <span class="font-medium text-gray-800">{{ fmt(profitLoss.revenue - profitLoss.maintenance) }}</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+              <span class="text-gray-600">Service / Maintenance</span>
+              <span class="font-medium text-gray-800">{{ fmt(profitLoss.maintenance) }}</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-200 font-semibold">
+              <span class="text-gray-800">Total Revenue</span>
+              <span class="text-gray-800">{{ fmt(profitLoss.revenue) }}</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+              <span class="text-gray-600">Cost of Goods Sold (COGS)</span>
+              <span class="text-red-500">− {{ fmt(profitLoss.cogs) }}</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-200 font-semibold"
+              :class="profitLoss.gross_profit >= 0 ? 'text-emerald-700' : 'text-red-600'">
+              <span>Gross Profit</span>
+              <span>{{ fmt(profitLoss.gross_profit) }} <span class="font-normal text-xs">({{ profitLoss.gross_margin }}%)</span></span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+              <span class="text-gray-600">Operating Expenses</span>
+              <span class="text-red-500">− {{ fmt(profitLoss.expenses) }}</span>
+            </div>
+            <div class="flex justify-between py-2 rounded-lg px-2 mt-1 font-bold text-base"
+              :class="profitLoss.net_profit >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'">
+              <span>Net Profit</span>
+              <span>{{ fmt(profitLoss.net_profit) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Daily trend table -->
+        <div class="card p-0 overflow-hidden">
+          <div class="px-5 py-3 border-b bg-gray-50">
+            <h4 class="font-semibold text-gray-700 text-sm">Daily Revenue Trend</h4>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="table-th">Date</th>
+                  <th class="table-th text-right">Invoices</th>
+                  <th class="table-th text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-if="!profitLoss.trend?.length">
+                  <td colspan="3" class="table-td text-center text-gray-400">No data</td>
+                </tr>
+                <tr v-for="r in profitLoss.trend" :key="r.date" class="hover:bg-gray-50">
+                  <td class="table-td text-gray-600">{{ r.date }}</td>
+                  <td class="table-td text-right text-gray-500">{{ r.invoices }}</td>
+                  <td class="table-td text-right font-medium text-emerald-600">{{ fmt(r.revenue) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- ── EXPENSES REPORT ── -->
+    <div v-if="activeTab === 'expenses'" class="space-y-4">
+      <div v-if="loading.expenses" class="py-16 text-center text-gray-400">Loading…</div>
+      <template v-else-if="expenses">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Transactions</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">{{ expenses.totals?.count ?? 0 }}</p>
+          </div>
+          <div class="card text-center md:col-span-2">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Total Expenses</p>
+            <p class="text-2xl font-bold text-red-500 mt-1">{{ fmt(expenses.totals?.total_amount) }}</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4 class="text-sm font-semibold text-gray-700 mb-3">By Category</h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="table-th">Category</th>
+                  <th class="table-th text-right">Count</th>
+                  <th class="table-th text-right">Total</th>
+                  <th class="table-th text-right">% of Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="r in expenses.by_category" :key="r.category" class="hover:bg-gray-50">
+                  <td class="table-td capitalize font-medium">{{ r.category }}</td>
+                  <td class="table-td text-right text-gray-500">{{ r.count }}</td>
+                  <td class="table-td text-right font-medium">{{ fmt(r.total) }}</td>
+                  <td class="table-td text-right text-gray-500">
+                    {{ expenses.totals?.total_amount > 0 ? Math.round((r.total / expenses.totals.total_amount) * 100) + '%' : '—' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card p-0 overflow-hidden">
+          <div class="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+            <h4 class="font-semibold text-gray-700 text-sm">Expense Detail</h4>
+            <button @click="exportCsv('expenses')" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              <ArrowDownTrayIcon class="w-3.5 h-3.5" /> Export CSV
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="table-th">Date</th>
+                  <th class="table-th">Category</th>
+                  <th class="table-th">Description</th>
+                  <th class="table-th">Method</th>
+                  <th class="table-th">Ref</th>
+                  <th class="table-th text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-if="!expenses.rows?.length">
+                  <td colspan="6" class="table-td text-center text-gray-400">No expenses in this period</td>
+                </tr>
+                <tr v-for="r in expenses.rows" :key="r.id" class="hover:bg-gray-50">
+                  <td class="table-td text-gray-500 text-xs">{{ r.expense_date }}</td>
+                  <td class="table-td capitalize text-xs">{{ r.category }}</td>
+                  <td class="table-td text-gray-600">{{ r.description ?? '—' }}</td>
+                  <td class="table-td capitalize text-xs">{{ r.payment_method ?? '—' }}</td>
+                  <td class="table-td font-mono text-xs text-gray-400">{{ r.reference_number ?? '—' }}</td>
+                  <td class="table-td text-right font-medium text-red-500">{{ fmt(r.amount) }}</td>
+                </tr>
+              </tbody>
+              <tfoot class="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                <tr>
+                  <td colspan="5" class="table-td text-right text-gray-600">Total</td>
+                  <td class="table-td text-right text-red-500">{{ fmt(expenses.totals?.total_amount) }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- ── SALARY REPORT ── -->
+    <div v-if="activeTab === 'salary'" class="space-y-4">
+      <div v-if="loading.salary" class="py-16 text-center text-gray-400">Loading…</div>
+      <template v-else-if="salary">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Payments</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">{{ salary.totals?.count ?? 0 }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Basic</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">{{ fmt(salary.totals?.total_basic) }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Allowances</p>
+            <p class="text-2xl font-bold text-emerald-600 mt-1">{{ fmt(salary.totals?.total_allowances) }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Net Paid</p>
+            <p class="text-2xl font-bold text-blue-600 mt-1">{{ fmt(salary.totals?.total_net) }}</p>
+          </div>
+        </div>
+
+        <div class="card p-0 overflow-hidden">
+          <div class="px-5 py-3 border-b bg-gray-50">
+            <h4 class="font-semibold text-gray-700 text-sm">Salary Payment Detail</h4>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="table-th">Payment #</th>
+                  <th class="table-th">Employee</th>
+                  <th class="table-th">Designation</th>
+                  <th class="table-th">Period</th>
+                  <th class="table-th">Date</th>
+                  <th class="table-th text-right">Basic</th>
+                  <th class="table-th text-right">Allowances</th>
+                  <th class="table-th text-right">Deductions</th>
+                  <th class="table-th text-right">Net</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-if="!salary.rows?.length">
+                  <td colspan="9" class="table-td text-center text-gray-400">No salary payments in this period</td>
+                </tr>
+                <tr v-for="r in salary.rows" :key="r.id" class="hover:bg-gray-50">
+                  <td class="table-td font-mono text-xs">{{ r.payment_number }}</td>
+                  <td class="table-td font-medium">{{ r.employee?.name ?? '—' }}</td>
+                  <td class="table-td text-xs text-gray-500">{{ r.employee?.designation ?? '—' }}</td>
+                  <td class="table-td text-xs text-gray-500">{{ r.period_from }} – {{ r.period_to }}</td>
+                  <td class="table-td text-xs text-gray-500">{{ r.payment_date }}</td>
+                  <td class="table-td text-right">{{ fmt(r.basic_salary) }}</td>
+                  <td class="table-td text-right text-emerald-600">{{ fmt(r.allowances) }}</td>
+                  <td class="table-td text-right text-red-500">{{ fmt(r.deductions) }}</td>
+                  <td class="table-td text-right font-bold text-blue-600">{{ fmt(r.net_salary) }}</td>
+                </tr>
+              </tbody>
+              <tfoot class="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                <tr>
+                  <td colspan="5" class="table-td text-right text-gray-600">Totals</td>
+                  <td class="table-td text-right">{{ fmt(salary.totals?.total_basic) }}</td>
+                  <td class="table-td text-right text-emerald-600">{{ fmt(salary.totals?.total_allowances) }}</td>
+                  <td class="table-td text-right text-red-500">{{ fmt(salary.totals?.total_deductions) }}</td>
+                  <td class="table-td text-right text-blue-600">{{ fmt(salary.totals?.total_net) }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, h } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import axios from 'axios'
-import { fmtDate } from '../utils/date.js'
+import {
+  ShoppingCartIcon,
+  TruckIcon,
+  CubeIcon,
+  StarIcon,
+  ChartBarIcon,
+  ReceiptPercentIcon,
+  UserGroupIcon,
+  PrinterIcon,
+  ArrowDownTrayIcon,
+} from '@heroicons/vue/24/outline'
 
-// ── Tiny render-function components (no runtime compiler needed) ────────────
-
-const StatTile = {
-  props: { label: String, value: [String, Number], color: String, plain: Boolean, sub: String },
-  setup(props) {
-    return () => h('div', { class: 'card text-center py-3' }, [
-      h('p', { class: 'text-xs text-gray-500 uppercase tracking-wider' }, props.label),
-      h('p', {
-        class: 'text-xl font-bold mt-1 ' + (
-          props.color === 'gold'  ? 'text-gold-700'  :
-          props.color === 'green' ? 'text-green-600' :
-          props.color === 'red'   ? 'text-red-600'   :
-          props.color === 'blue'  ? 'text-blue-600'  : 'text-gray-800'
-        ),
-      }, props.plain ? props.value : 'LKR ' + props.value),
-      props.sub ? h('p', { class: 'text-xs text-gray-400 mt-0.5' }, props.sub) : null,
-    ].filter(Boolean))
-  },
-}
-
-const ReportTable = {
-  props: ['headers', 'rows'],
-  setup(props) {
-    return () => h('div', { class: 'card p-0 overflow-hidden overflow-x-auto', id: 'report-table' },
-      h('table', { class: 'w-full text-sm' }, [
-        h('thead', { class: 'bg-gray-50 border-b' },
-          h('tr', {}, props.headers.map(hdr => h('th', { class: 'table-th whitespace-nowrap', key: hdr }, hdr)))
-        ),
-        h('tbody', { class: 'divide-y divide-gray-100' },
-          props.rows.length
-            ? props.rows.map((row, i) =>
-                h('tr', { class: 'hover:bg-gray-50', key: i },
-                  row.map((cell, j) => h('td', { class: 'table-td whitespace-nowrap', key: j }, String(cell ?? '—')))
-                )
-              )
-            : [h('tr', {}, h('td', { colspan: props.headers.length, class: 'table-td text-center text-gray-400 py-8' }, 'No data for this period'))]
-        ),
-      ])
-    )
-  },
-}
-
-// ── Report definitions ──────────────────────────────────────────────────────
-
-const reportList = [
-  { key: 'sales',      label: 'Sales',            icon: '🛍', hasDateFilter: true,  endpoint: '/api/reports/sales-summary' },
-  { key: 'purchases',  label: 'Purchases',        icon: '📦', hasDateFilter: true,  endpoint: '/api/reports/purchases' },
-  { key: 'gold-rates', label: 'Gold Rate History',icon: '📈', hasDateFilter: true,  endpoint: '/api/reports/gold-rate-history' },
-  { key: 'buybacks',   label: 'Old Gold',         icon: '♻️', hasDateFilter: true,  endpoint: '/api/reports/buybacks' },
-  { key: 'salary',     label: 'Salary Payments',  icon: '👥', hasDateFilter: true,  endpoint: '/api/reports/salary' },
-  { key: 'expenses',   label: 'Expenses',         icon: '💸', hasDateFilter: true,  endpoint: '/api/reports/expenses' },
-  { key: 'loans',      label: 'Gold Loans',       icon: '🏦', hasDateFilter: false, endpoint: '/api/reports/gold-loans' },
-  { key: 'metal',      label: 'Metal Balance',    icon: '⚖️', hasDateFilter: false, endpoint: '/api/reports/metal-balance' },
-  { key: 'pnl',        label: 'Rate P&L',         icon: '📊', hasDateFilter: false, endpoint: '/api/reports/rate-pnl' },
-  { key: 'tax',        label: 'Tax Settings',     icon: '🧾', hasDateFilter: false, endpoint: null },
-]
-
-// ── State ───────────────────────────────────────────────────────────────────
-
-const active  = ref('sales')
-const data    = ref(null)
-const loading = ref(false)
-
-const today     = new Date().toISOString().split('T')[0]
-const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+// ── date state ──────────────────────────────────────────────
+const today     = new Date().toISOString().slice(0, 10)
+const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
 const dateFrom  = ref(monthStart)
 const dateTo    = ref(today)
-const loanStatus = ref('all')
+const activeRange = ref('This Month')
 
-const currentReport = computed(() => reportList.find(r => r.key === active.value) ?? reportList[0])
+const quickRanges = [
+  { label: 'Today',      days: 0, type: 'today' },
+  { label: 'This Week',  days: 6, type: 'back' },
+  { label: 'This Month', days: null, type: 'month' },
+  { label: 'Last 3 Months', days: 89, type: 'back' },
+  { label: 'This Year',  days: null, type: 'year' },
+]
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-function lkr(val) {
-  return Number(val || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function setQuickRange(r) {
+  activeRange.value = r.label
+  const now = new Date()
+  if (r.type === 'today') {
+    dateFrom.value = dateTo.value = today
+  } else if (r.type === 'month') {
+    dateFrom.value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+    dateTo.value   = today
+  } else if (r.type === 'year') {
+    dateFrom.value = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10)
+    dateTo.value   = today
+  } else {
+    const d = new Date(now)
+    d.setDate(d.getDate() - r.days)
+    dateFrom.value = d.toISOString().slice(0, 10)
+    dateTo.value   = today
+  }
+  loadTab(activeTab.value)
 }
 
-const fmt = fmtDate
-const formatDate = fmtDate
+function applyDates() {
+  activeRange.value = ''
+  loadTab(activeTab.value)
+}
 
-// ── Load ─────────────────────────────────────────────────────────────────────
+// ── tabs ────────────────────────────────────────────────────
+const tabs = [
+  { id: 'sales',        label: 'Sales',         icon: ShoppingCartIcon  },
+  { id: 'purchases',    label: 'Purchases',      icon: TruckIcon         },
+  { id: 'inventory',    label: 'Inventory',      icon: CubeIcon          },
+  { id: 'top-products', label: 'Top Parts',      icon: StarIcon          },
+  { id: 'profit-loss',  label: 'Profit & Loss',  icon: ChartBarIcon      },
+  { id: 'expenses',     label: 'Expenses',       icon: ReceiptPercentIcon },
+  { id: 'salary',       label: 'Salary',         icon: UserGroupIcon     },
+]
 
-async function generate() {
-  const report = currentReport.value
-  if (!report.endpoint) return
-  loading.value = true
-  data.value    = null
+const activeTab = ref('sales')
+
+// ── data ────────────────────────────────────────────────────
+const loading     = reactive({})
+const sales       = ref(null)
+const purchases   = ref(null)
+const inventory   = ref(null)
+const topProducts = ref(null)
+const profitLoss  = ref(null)
+const expenses    = ref(null)
+const salary      = ref(null)
+
+const dataMap = { sales, purchases, inventory, 'top-products': topProducts, 'profit-loss': profitLoss, expenses, salary }
+const apiMap  = {
+  sales:          () => `/api/reports/sales?date_from=${dateFrom.value}&date_to=${dateTo.value}`,
+  purchases:      () => `/api/reports/purchases?date_from=${dateFrom.value}&date_to=${dateTo.value}`,
+  inventory:      () => `/api/reports/inventory`,
+  'top-products': () => `/api/reports/top-products?date_from=${dateFrom.value}&date_to=${dateTo.value}`,
+  'profit-loss':  () => `/api/reports/profit-loss?date_from=${dateFrom.value}&date_to=${dateTo.value}`,
+  expenses:       () => `/api/reports/expenses?date_from=${dateFrom.value}&date_to=${dateTo.value}`,
+  salary:         () => `/api/reports/salary?date_from=${dateFrom.value}&date_to=${dateTo.value}`,
+}
+
+async function loadTab(tab) {
+  loading[tab] = true
   try {
-    const params = {}
-    if (report.hasDateFilter) { params.date_from = dateFrom.value; params.date_to = dateTo.value }
-    if (active.value === 'loans') params.status = loanStatus.value
-    const { data: d } = await axios.get(report.endpoint, { params })
-    data.value = d
+    const { data } = await axios.get(apiMap[tab]())
+    dataMap[tab].value = data
   } catch (e) {
-    console.error(e)
+    console.error('Report load failed', e)
   } finally {
-    loading.value = false
+    loading[tab] = false
   }
 }
 
-async function switchReport(key) {
-  active.value = key
-  data.value   = null
-  if (key === 'tax') { loadTaxes(); return }
-  await generate()
+// ── helpers ─────────────────────────────────────────────────
+const currency = new Intl.NumberFormat('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function fmt(v) { return 'Rs ' + currency.format(v ?? 0) }
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-GB') : '—' }
+function statusClass(s) {
+  return {
+    paid:    'bg-emerald-100 text-emerald-700',
+    partial: 'bg-yellow-100 text-yellow-700',
+    pending: 'bg-gray-100 text-gray-600',
+    unpaid:  'bg-red-100 text-red-600',
+    credit:  'bg-blue-100 text-blue-700',
+  }[s] ?? 'bg-gray-100 text-gray-600'
 }
 
-// ── Export helpers ───────────────────────────────────────────────────────────
+// ── CSV export ───────────────────────────────────────────────
+function exportCsv(tab) {
+  const d = dataMap[tab]?.value
+  if (!d) return
 
-function getTableData() {
-  const el = document.querySelector('#report-table table')
-  if (!el) return { headers: [], rows: [] }
-  const headers = [...el.querySelectorAll('thead th')].map(th => th.innerText.trim())
-  const rows = [...el.querySelectorAll('tbody tr')].map(tr =>
-    [...tr.querySelectorAll('td')].map(td => td.innerText.trim())
-  )
-  return { headers, rows }
+  let rows = []
+  let headers = []
+
+  if (tab === 'sales') {
+    headers = ['Invoice', 'Customer', 'Vehicle', 'Date', 'Method', 'Status', 'Total', 'Paid']
+    rows = (d.rows ?? []).map(r => [
+      r.invoice_number, r.customer?.name ?? '', r.customer?.vehicle_number ?? '',
+      fmtDate(r.sold_at), r.payment_method ?? '', r.payment_status,
+      r.total, r.amount_paid,
+    ])
+  } else if (tab === 'purchases') {
+    headers = ['PO Number', 'Supplier', 'Date', 'Method', 'Status', 'Subtotal', 'Total']
+    rows = (d.rows ?? []).map(r => [
+      r.purchase_number, r.supplier?.name ?? '', fmtDate(r.purchased_at),
+      r.payment_method ?? '', r.status, r.subtotal, r.total,
+    ])
+  } else if (tab === 'inventory') {
+    headers = ['SKU', 'Name', 'Category', 'Brand', 'Stock', 'Min Stock', 'Cost Price', 'Sell Price', 'Stock Value']
+    rows = (d.products ?? []).map(p => [
+      p.sku, p.name, p.part_category?.name ?? '', p.brand?.name ?? '',
+      p.stock_quantity, p.min_stock_level, p.purchase_price, p.selling_price,
+      (p.purchase_price * p.stock_quantity).toFixed(2),
+    ])
+  } else if (tab === 'top-products') {
+    headers = ['#', 'SKU', 'Name', 'Category', 'Qty Sold', 'Avg Price', 'Revenue']
+    rows = (d.rows ?? []).map((r, i) => [i + 1, r.sku, r.name, r.category ?? '', r.qty_sold, r.avg_price, r.revenue])
+  } else if (tab === 'expenses') {
+    headers = ['Date', 'Category', 'Description', 'Method', 'Reference', 'Amount']
+    rows = (d.rows ?? []).map(r => [
+      r.expense_date, r.category, r.description ?? '', r.payment_method ?? '', r.reference_number ?? '', r.amount,
+    ])
+  }
+
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `${tab}-report-${dateFrom.value}-to-${dateTo.value}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
-function doCSV() {
-  const { headers, rows } = getTableData()
-  if (!headers.length) return
-  const lines = [headers, ...rows].map(r =>
-    r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')
-  )
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
-  const a = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(blob),
-    download: `${currentReport.value.label.replace(/\s+/g, '_')}_${dateFrom.value || today}.csv`,
-  })
-  a.click(); URL.revokeObjectURL(a.href)
+function printReport() {
+  window.print()
 }
 
-function doPrint() {
-  const { headers, rows } = getTableData()
-  const title = currentReport.value.label
-  const tHead = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`
-  const tBody = rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
-  const periodLine = currentReport.value.hasDateFilter
-    ? `<p style="margin:4px 0 12px;color:#666;font-size:13px">Period: ${dateFrom.value} → ${dateTo.value}</p>` : ''
-  const win = window.open('', '_blank')
-  win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
-    *{font-family:Arial,sans-serif;box-sizing:border-box}
-    body{margin:24px;color:#111}
-    h2{margin:0 0 4px;font-size:18px}
-    table{border-collapse:collapse;width:100%;font-size:12px;margin-top:12px}
-    th,td{border:1px solid #ddd;padding:5px 8px;text-align:left}
-    th{background:#f5f5f5;font-weight:600}
-    tr:nth-child(even){background:#fafafa}
-    @media print{@page{margin:15mm}button{display:none!important}}
-  </style></head><body>
-    <h2>${title}</h2>${periodLine}
-    <table><thead>${tHead}</thead><tbody>${tBody}</tbody></table>
-    <script>setTimeout(()=>window.print(),300)<\/script>
-  </body></html>`)
-  win.document.close()
-}
-
-// ── Tax settings (inline CRUD) ───────────────────────────────────────────────
-
-const taxList      = ref([])
-const showTaxModal = ref(false)
-const editingTax   = ref(null)
-const taxSaving    = ref(false)
-const taxError     = ref('')
-const taxForm = reactive({ name: '', rate: 0, applies_to: 'all', is_active: true, description: '' })
-
-async function loadTaxes() {
-  const { data: d } = await axios.get('/api/tax-settings')
-  taxList.value = d
-}
-
-function openTaxModal(t) {
-  editingTax.value = t; taxError.value = ''
-  Object.assign(taxForm, { name: t?.name ?? '', rate: t?.rate ?? 0, applies_to: t?.applies_to ?? 'all', is_active: t?.is_active ?? true, description: t?.description ?? '' })
-  showTaxModal.value = true
-}
-
-async function saveTax() {
-  taxSaving.value = true; taxError.value = ''
-  try {
-    if (editingTax.value) await axios.put(`/api/tax-settings/${editingTax.value.id}`, taxForm)
-    else                  await axios.post('/api/tax-settings', taxForm)
-    showTaxModal.value = false; loadTaxes()
-  } catch (e) {
-    taxError.value = e.response?.data?.message ?? Object.values(e.response?.data?.errors ?? {}).flat().join(', ')
-  } finally { taxSaving.value = false }
-}
-
-// ── Init ─────────────────────────────────────────────────────────────────────
-
-onMounted(() => generate())
+onMounted(() => loadTab('sales'))
 </script>

@@ -11,7 +11,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('sales', function (Blueprint $table) {
-            $table->string('view_token', 40)->nullable()->unique()->after('notes');
+            $table->string('view_token', 40)->nullable()->unique();
         });
 
         // Back-fill existing rows
@@ -27,3 +27,4 @@ return new class extends Migration
         });
     }
 };
+

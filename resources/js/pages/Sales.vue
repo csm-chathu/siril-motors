@@ -6,14 +6,15 @@
       <div class="flex flex-wrap items-center gap-2">
         <div class="relative">
           <MagnifyingGlassIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-          <input v-model="search" type="search" placeholder="Search invoice, customer…"
-            class="form-input pl-8 w-52" @input="debouncedFetch" />
+          <input v-model="search" type="search" placeholder="Invoice, customer, vehicle no…"
+            class="form-input pl-8 w-64" @input="debouncedFetch" />
         </div>
         <input v-model="dateFrom" type="date" class="form-input w-36" @change="fetchData" title="From date" />
         <span class="text-gray-400 text-xs">to</span>
         <input v-model="dateTo"   type="date" class="form-input w-36" @change="fetchData" title="To date" />
         <select v-model="statusFilter" class="form-input w-32" @change="fetchData">
           <option value="">All status</option>
+          <option value="draft">Draft</option>
           <option value="paid">Paid</option>
           <option value="pending">Pending</option>
           <option value="partial">Partial</option>
@@ -81,6 +82,7 @@
             <tr>
               <th class="table-th w-36">Invoice</th>
               <th class="table-th">Customer</th>
+              <th class="table-th w-28">Vehicle No.</th>
               <th class="table-th w-28">Date</th>
               <th class="table-th w-24">Type</th>
               <th class="table-th w-36 text-right">Total</th>
@@ -92,7 +94,7 @@
           </thead>
           <tbody class="divide-y divide-gray-100">
             <tr v-if="loading">
-              <td colspan="9" class="table-td text-center py-10 text-gray-400">
+              <td colspan="10" class="table-td text-center py-10 text-gray-400">
                 <div class="flex items-center justify-center gap-2">
                   <ArrowPathIcon class="w-4 h-4 animate-spin" /> Loading…
                 </div>
@@ -102,9 +104,11 @@
               <tr v-for="s in sales.data" :key="s.id"
                 class="hover:bg-amber-50/40 transition-colors cursor-default group">
                 <td class="table-td">
-                  <span class="font-mono text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                  <span class="font-mono text-xs font-semibold px-2 py-0.5 rounded"
+                    :class="s.is_draft ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700'">
                     {{ s.invoice_number }}
                   </span>
+                  <span v-if="s.is_draft" class="ml-1 text-[10px] font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-1 py-0.5 rounded uppercase tracking-wide">Draft</span>
                 </td>
                 <td class="table-td">
                   <div class="flex items-center gap-2">
@@ -116,6 +120,13 @@
                       <p v-if="s.customer?.phone" class="text-xs text-gray-400">{{ s.customer.phone }}</p>
                     </div>
                   </div>
+                </td>
+                <td class="table-td">
+                  <span v-if="s.customer?.vehicle_number"
+                    class="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                    {{ s.customer.vehicle_number }}
+                  </span>
+                  <span v-else class="text-gray-300 text-xs">—</span>
                 </td>
                 <td class="table-td text-xs text-gray-500">
                   <div>{{ fmtDate(s.sold_at) }}</div>
@@ -143,15 +154,22 @@
                 </td>
                 <td class="table-td text-center">
                   <div class="flex items-center justify-center gap-1.5">
-                    <router-link :to="`/sales/${s.id}`"
-                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200">
-                      <PrinterIcon class="w-3.5 h-3.5" /> Receipt
+                    <router-link :to="s.is_draft ? `/sales/${s.id}/edit` : `/sales/${s.id}`"
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium hover:bg-opacity-80 transition-colors"
+                      :class="s.is_draft ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'">
+                      <PencilSquareIcon v-if="s.is_draft" class="w-3.5 h-3.5" />
+                      <PrinterIcon v-else class="w-3.5 h-3.5" />
+                      {{ s.is_draft ? 'Edit Draft' : 'Receipt' }}
                     </router-link>
+                    <button v-if="s.is_draft" @click="finalizeDraft(s)"
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
+                      <CheckCircleIcon class="w-3.5 h-3.5" /> Finalize
+                    </button>
                     <button @click="del(s)"
                       class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200">
                       <TrashIcon class="w-3.5 h-3.5" />
                     </button>
-                    <button v-if="s.sale_type === 'booking' && s.delivery_status === 'booked'"
+                    <button v-if="!s.is_draft && s.sale_type === 'booking' && s.delivery_status === 'booked'"
                       @click="openSettle(s)"
                       class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
                       Settle
@@ -160,7 +178,7 @@
                 </td>
               </tr>
               <tr v-if="!sales.data?.length">
-                <td colspan="9" class="table-td text-center py-12">
+                <td colspan="10" class="table-td text-center py-12">
                   <div class="flex flex-col items-center gap-2 text-gray-400">
                     <ReceiptPercentIcon class="w-10 h-10 opacity-30" />
                     <span>No sales found</span>
@@ -233,6 +251,7 @@ import {
   PlusIcon, TrashIcon, EyeIcon, MagnifyingGlassIcon,
   ReceiptPercentIcon, BanknotesIcon, CheckCircleIcon, PrinterIcon,
   ChartBarIcon, ArrowPathIcon, ChevronLeftIcon, ChevronRightIcon,
+  DocumentTextIcon, PencilSquareIcon,
 } from '@heroicons/vue/24/outline'
 import { fmtDate } from '../utils/date.js'
 
@@ -240,7 +259,7 @@ const router       = useRouter()
 const sales        = ref({ data: [] })
 const search       = ref('')
 const page         = ref(1)
-const dateFrom     = ref('')
+const dateFrom     = ref(new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10))
 const dateTo       = ref('')
 const statusFilter = ref('')
 const typeFilter   = ref('')
@@ -350,8 +369,21 @@ async function submitSettle() {
   }
 }
 
+async function finalizeDraft(s) {
+  if (!confirm(`Finalize draft ${s.invoice_number}?\nThis will deduct stock and post to the general ledger.`)) return
+  try {
+    await axios.post(`/api/sales/${s.id}/finalize`)
+    fetchData()
+  } catch (e) {
+    alert(e.response?.data?.message ?? 'Failed to finalize draft.')
+  }
+}
+
 async function del(s) {
-  if (!confirm(`Delete invoice ${s.invoice_number}?\nThis will restore stock. This action cannot be undone.`)) return
+  const msg = s.is_draft
+    ? `Delete draft ${s.invoice_number}? This action cannot be undone.`
+    : `Delete invoice ${s.invoice_number}?\nThis will restore stock. This action cannot be undone.`
+  if (!confirm(msg)) return
   await axios.delete(`/api/sales/${s.id}`)
   fetchData()
 }

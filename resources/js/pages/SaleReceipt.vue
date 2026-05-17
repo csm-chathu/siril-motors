@@ -1,7 +1,7 @@
 ﻿<template>
   <div :data-print-mode="printMode">
 
-    <!-- â"€â"€ Screen toolbar (no-print) â"€â"€ -->
+    <!-- ── Screen toolbar (no-print) ── -->
     <div class="no-print flex flex-wrap items-center justify-between gap-3 mb-6">
       <div class="flex items-center gap-3">
         <router-link to="/sales"
@@ -10,13 +10,32 @@
         </router-link>
         <span class="text-gray-300">/</span>
         <span class="text-sm font-medium text-gray-700">{{ sale?.invoice_number }}</span>
-        <span v-if="sale?.sale_type === 'booking'" class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full"
+        <span v-if="sale?.is_draft" class="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300 uppercase tracking-wide">
+          Draft
+        </span>
+        <span v-else-if="sale?.sale_type === 'booking'" class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full"
           :class="sale.delivery_status === 'booked' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'">
           {{ sale.delivery_status === 'booked' ? 'Booking — Pending Collection' : 'Booking — Collected' }}
         </span>
       </div>
 
-      <div class="flex flex-wrap gap-2 items-center">
+      <!-- Draft actions -->
+      <div v-if="sale?.is_draft" class="flex flex-wrap gap-2 items-center">
+        <router-link :to="`/sales/${sale.id}/edit`"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-medium text-sm shadow-sm transition-colors">
+          <PencilSquareIcon class="w-4 h-4" /> Edit Draft
+        </router-link>
+        <button @click="finalizeDraft"
+          :disabled="finalizing"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-lg font-medium text-sm shadow-sm transition-colors">
+          <ArrowPathIcon v-if="finalizing" class="w-4 h-4 animate-spin" />
+          <CheckCircleIcon v-else class="w-4 h-4" />
+          {{ finalizing ? 'Finalizing…' : 'Finalize & Print' }}
+        </button>
+      </div>
+
+      <!-- Normal sale actions -->
+      <div v-else class="flex flex-wrap gap-2 items-center">
         <!-- Settle shortcut for pending bookings -->
         <button v-if="sale?.sale_type === 'booking' && sale?.delivery_status === 'booked'"
           @click="settleModal = true"
@@ -62,6 +81,15 @@
           <PrinterIcon class="w-4 h-4" />
           {{ printMode === 'a5' ? 'Print A5 Invoice' : 'Print Receipt' }}
         </button>
+      </div>
+    </div>
+
+    <!-- Draft banner -->
+    <div v-if="sale?.is_draft" class="no-print mb-6 bg-yellow-50 border border-yellow-300 rounded-xl p-4 flex items-start gap-3">
+      <div class="w-9 h-9 rounded-full bg-yellow-200 flex items-center justify-center shrink-0 text-yellow-700 font-bold text-lg">!</div>
+      <div>
+        <p class="font-semibold text-yellow-900">This is a draft — not yet invoiced</p>
+        <p class="text-sm text-yellow-700 mt-0.5">Stock has not been deducted and no accounting entry has been posted. Add parts as they are picked from the shop, then click <strong>Finalize &amp; Print</strong> when the repair is complete.</p>
       </div>
     </div>
 
@@ -123,6 +151,7 @@
           <div style="font-size:10px; margin-bottom:4px;">
             <div><strong>Customer:</strong> {{ sale.customer?.name ?? 'Walk-in' }}</div>
             <div v-if="sale.customer?.phone">Phone: {{ sale.customer.phone }}</div>
+            <div v-if="sale.customer?.vehicle_number">Vehicle: {{ sale.customer.vehicle_number }}</div>
           </div>
 
           <hr class="receipt-divider" />
@@ -143,16 +172,7 @@
                 <span style="width:58px; text-align:right; font-weight:bold;">{{ lkr(item.total) }}</span>
               </div>
               <div style="color:#555; font-size:9px; padding-left:2px; line-height:1.3;">
-                <span v-if="item.product?.sku">SKU:{{ item.product.sku }}  </span>
-                <span v-if="item.product?.karat">{{ item.product.karat }}</span>
-                <span v-if="item.product?.weight"> {{ item.product.weight }}g</span>
-              </div>
-              <div v-if="item.gold_value || item.making_charge || item.wastage_amount || item.gemstone_value"
-                style="font-size:9px; color:#555; padding-left:2px;">
-                <span v-if="item.gold_value">Gold:{{ lkr(item.gold_value) }}  </span>
-                <span v-if="item.gemstone_value">Gem:{{ lkr(item.gemstone_value) }}  </span>
-                <span v-if="item.making_charge">MC:{{ lkr(item.making_charge) }}  </span>
-                <span v-if="item.wastage_amount">Wst:{{ lkr(item.wastage_amount) }}</span>
+                <span v-if="item.product?.sku">SKU:{{ item.product.sku }}</span>
               </div>
               <div v-if="Number(item.discount) > 0" style="font-size:9px; color:#555; padding-left:2px;">
                 Item Disc: -{{ lkr(item.discount) }}
@@ -172,6 +192,9 @@
             </div>
             <div v-if="Number(sale.tax) > 0" style="display:flex; justify-content:space-between; margin-bottom:2px;">
               <span>Tax ({{ sale.tax_rate }}%)</span><span>+LKR {{ lkr(sale.tax) }}</span>
+            </div>
+            <div v-if="Number(sale.maintenance_amount) > 0" style="display:flex; justify-content:space-between; margin-bottom:2px;">
+              <span>Maintenance</span><span>+LKR {{ lkr(sale.maintenance_amount) }}</span>
             </div>
           </div>
 
@@ -262,6 +285,7 @@
             <strong>Bill To:</strong>
             {{ sale.customer?.name ?? 'Walk-in Customer' }}
             <span v-if="sale.customer?.phone"> &nbsp;|&nbsp; Tel: {{ sale.customer.phone }}</span>
+            <span v-if="sale.customer?.vehicle_number"> &nbsp;|&nbsp; Vehicle: <strong>{{ sale.customer.vehicle_number }}</strong></span>
             <span style="text-transform:capitalize;"> &nbsp;|&nbsp; Payment: {{ sale.payment_method?.replace('_', ' ') }}</span>
             <span> &nbsp;|&nbsp; Status: <strong style="text-transform:uppercase;">{{ sale.payment_status }}</strong></span>
           </div>
@@ -283,15 +307,6 @@
                   <div style="font-weight:600;">{{ item.product?.name ?? 'Unknown' }}</div>
                   <div style="font-size:10px; color:#666;">
                     <span v-if="item.product?.sku">SKU: {{ item.product.sku }}</span>
-                    <span v-if="item.product?.karat">  Â·  {{ item.product.karat }}</span>
-                    <span v-if="item.product?.weight">  Â·  {{ item.product.weight }}g</span>
-                  </div>
-                  <div v-if="item.gold_value || item.making_charge || item.wastage_amount || item.gemstone_value"
-                    style="font-size:10px; color:#888; margin-top:2px;">
-                    <span v-if="item.gold_value">Gold: LKR {{ lkr(item.gold_value) }}  </span>
-                    <span v-if="item.gemstone_value">Gem: LKR {{ lkr(item.gemstone_value) }}  </span>
-                    <span v-if="item.making_charge">Making: LKR {{ lkr(item.making_charge) }}  </span>
-                    <span v-if="item.wastage_amount">Wastage: LKR {{ lkr(item.wastage_amount) }}</span>
                   </div>
                 </td>
                 <td style="text-align:center;">{{ item.quantity }}</td>
@@ -318,6 +333,9 @@
               </div>
               <div v-if="Number(sale.tax) > 0" class="inv-total-line">
                 <span>Tax ({{ sale.tax_rate }}%)</span><span>+ LKR {{ lkr(sale.tax) }}</span>
+              </div>
+              <div v-if="Number(sale.maintenance_amount) > 0" class="inv-total-line">
+                <span>Maintenance</span><span>+ LKR {{ lkr(sale.maintenance_amount) }}</span>
               </div>
               <div class="inv-total-line inv-grand-total">
                 <span>TOTAL</span><span>LKR {{ lkr(sale.total) }}</span>
@@ -448,17 +466,34 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
-import { ArrowLeftIcon, PrinterIcon, ArrowPathIcon, DocumentTextIcon, CheckCircleIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, PrinterIcon, ArrowPathIcon, DocumentTextIcon, CheckCircleIcon, PencilSquareIcon } from '@heroicons/vue/24/outline'
 import { fmtDate } from '../utils/date.js'
 
 const route           = useRoute()
 const sale            = ref(null)
 const loading         = ref(true)
 const barcodeCanvas   = ref(null)
-const appName         = import.meta.env.VITE_APP_NAME ?? 'Jewellery Store'
+const appName         = import.meta.env.VITE_APP_NAME ?? 'Siril Motors'
 const preferredPrinter = import.meta.env.VITE_THERMAL_PRINTER ?? ''
 const directPrinting  = ref(false)
 const directPrintError = ref('')
+
+// Finalize draft
+const finalizing = ref(false)
+async function finalizeDraft() {
+  if (!sale.value) return
+  finalizing.value = true
+  try {
+    const { data } = await axios.post(`/api/sales/${sale.value.id}/finalize`)
+    sale.value = data
+    await nextTick()
+    drawAllBarcodes()
+  } catch (e) {
+    alert(e.response?.data?.message ?? 'Could not finalize draft.')
+  } finally {
+    finalizing.value = false
+  }
+}
 
 // Settle booking
 const settleModal  = ref(false)

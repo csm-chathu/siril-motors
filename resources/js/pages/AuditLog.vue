@@ -19,7 +19,7 @@
     <div class="flex gap-2 flex-wrap">
       <button v-for="a in quickActions" :key="a.value"
         @click="filters.action = a.value; load()"
-        :class="filters.action === a.value ? 'bg-gold-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+        :class="filters.action === a.value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
         class="px-3 py-1 rounded-full text-xs font-medium transition-colors">
         {{ a.label }}
       </button>
@@ -110,7 +110,7 @@ function formatTime(ts) {
 
 function actionClass(action) {
   if (action.includes('delete') || action.includes('deleted')) return 'bg-red-100 text-red-700'
-  if (action.includes('rate'))    return 'bg-gold-100 text-gold-700'
+  if (action.includes('rate'))    return 'bg-yellow-100 text-yellow-700'
   if (action.includes('created')) return 'bg-green-100 text-green-700'
   if (action.includes('updated')) return 'bg-blue-100 text-blue-700'
   return 'bg-gray-100 text-gray-600'

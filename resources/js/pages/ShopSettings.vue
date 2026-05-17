@@ -14,28 +14,53 @@
       <div>
         <label class="form-label">Shop Logo</label>
         <div class="flex items-center gap-4">
-          <div class="w-20 h-20 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center bg-gray-50 shrink-0 overflow-hidden">
+          <!-- Preview -->
+          <div class="w-24 h-24 border-2 rounded-xl flex items-center justify-center bg-gray-50 shrink-0 overflow-hidden transition-colors"
+            :class="dragOver ? 'border-amber-400 bg-amber-50' : 'border-dashed border-gray-200'"
+            @dragover.prevent="dragOver = true"
+            @dragleave.prevent="dragOver = false"
+            @drop.prevent="onDrop">
             <img v-if="form.logo_url" :src="form.logo_url" alt="Logo" class="w-full h-full object-contain p-1" />
             <PhotoIcon v-else class="w-8 h-8 text-gray-300" />
           </div>
+
           <div class="flex-1 space-y-2">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input ref="logoInput" type="file" accept="image/*" class="hidden" @change="onLogoChange" />
-              <button type="button" @click="logoInput.click()"
-                class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                <ArrowUpTrayIcon class="w-4 h-4" />
-                {{ logoUploading ? 'Uploading…' : 'Choose Image' }}
-              </button>
-            </label>
-            <p class="text-xs text-gray-400">PNG, JPG, GIF or WebP · max 2 MB</p>
-            <p v-if="logoError" class="text-xs text-red-500">{{ logoError }}</p>
+            <input ref="logoInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" class="hidden" @change="onLogoChange" />
+
+            <button type="button" @click="logoInput.click()" :disabled="logoUploading"
+              class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors">
+              <ArrowPathIcon v-if="logoUploading" class="w-4 h-4 animate-spin text-amber-500" />
+              <ArrowUpTrayIcon v-else class="w-4 h-4" />
+              {{ logoUploading ? 'Uploading to Cloudinary…' : 'Upload Image' }}
+            </button>
+
+            <!-- Progress bar -->
+            <div v-if="logoUploading" class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+              <div class="h-full bg-amber-400 rounded-full animate-pulse" style="width:70%"></div>
+            </div>
+
+            <p class="text-xs text-gray-400">PNG, JPG, GIF, WebP or SVG · max 2 MB · drag &amp; drop supported</p>
+            <p class="text-xs text-gray-400 flex items-center gap-1">
+              <CloudIcon class="w-3.5 h-3.5" /> Stored on Cloudinary CDN
+            </p>
+
+            <div v-if="form.logo_url" class="flex items-center gap-2">
+              <span class="text-xs text-green-600 flex items-center gap-1">
+                <CheckCircleIcon class="w-3.5 h-3.5" /> Logo uploaded
+              </span>
+              <button type="button" @click="removeLogo" class="text-xs text-red-500 hover:text-red-700 underline">Remove</button>
+            </div>
+
+            <p v-if="logoError" class="text-xs text-red-500 flex items-center gap-1">
+              <ExclamationTriangleIcon class="w-3.5 h-3.5" /> {{ logoError }}
+            </p>
           </div>
         </div>
       </div>
 
       <div>
-        <label class="form-label">Shop / Jewellery Name <span class="text-red-400">*</span></label>
-        <input v-model="form.shop_name" type="text" placeholder="e.g. Royal Gems Jewellers" class="form-input" maxlength="200" />
+        <label class="form-label">Shop Name <span class="text-red-400">*</span></label>
+        <input v-model="form.shop_name" type="text" placeholder="e.g. Siril Motors" class="form-input" maxlength="200" />
       </div>
 
       <div>
@@ -99,6 +124,27 @@
       <span v-if="error" class="text-sm text-red-600">{{ error }}</span>
     </div>
 
+    <!-- Database Backup -->
+    <div class="card space-y-3">
+      <h3 class="font-semibold text-gray-700 border-b border-gray-100 pb-2 flex items-center gap-2">
+        <CircleStackIcon class="w-4 h-4 text-gray-500" /> Database Backup
+      </h3>
+      <p class="text-sm text-gray-500">
+        Download a full SQL dump of the database. Keep this file in a safe place — it can be used to restore all data.
+      </p>
+      <div class="flex items-center gap-3">
+        <button @click="downloadBackup" :disabled="backingUp"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-900 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors">
+          <ArrowDownTrayIcon v-if="!backingUp" class="w-4 h-4" />
+          <ArrowPathIcon v-else class="w-4 h-4 animate-spin" />
+          {{ backingUp ? 'Preparing…' : 'Download Backup (.sql)' }}
+        </button>
+        <span v-if="backupError" class="text-sm text-red-600 flex items-center gap-1">
+          <ExclamationTriangleIcon class="w-4 h-4" /> {{ backupError }}
+        </span>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -108,6 +154,7 @@ import axios from 'axios'
 import {
   Cog6ToothIcon, PrinterIcon, DocumentTextIcon,
   ArrowPathIcon, CheckCircleIcon, PhotoIcon, ArrowUpTrayIcon,
+  CloudIcon, ExclamationTriangleIcon, CircleStackIcon, ArrowDownTrayIcon,
 } from '@heroicons/vue/24/outline'
 
 const form = ref({
@@ -118,12 +165,13 @@ const form = ref({
   logo_url:   '',
   print_mode: 'pos',
 })
-const saving       = ref(false)
-const saved        = ref(false)
-const error        = ref('')
-const logoInput    = ref(null)
+const saving        = ref(false)
+const saved         = ref(false)
+const error         = ref('')
+const logoInput     = ref(null)
 const logoUploading = ref(false)
-const logoError    = ref('')
+const logoError     = ref('')
+const dragOver      = ref(false)
 
 onMounted(async () => {
   try {
@@ -136,10 +184,18 @@ onMounted(async () => {
   }
 })
 
-async function onLogoChange(e) {
-  const file = e.target.files[0]
+async function uploadFile(file) {
   if (!file) return
-  logoError.value    = ''
+  const maxMb = 2
+  if (file.size > maxMb * 1024 * 1024) {
+    logoError.value = `File too large. Maximum size is ${maxMb} MB.`
+    return
+  }
+  if (!file.type.startsWith('image/')) {
+    logoError.value = 'Only image files are allowed.'
+    return
+  }
+  logoError.value     = ''
   logoUploading.value = true
   try {
     const fd = new FormData()
@@ -149,10 +205,58 @@ async function onLogoChange(e) {
     })
     form.value.logo_url = data.logo_url
   } catch (e) {
-    logoError.value = e.response?.data?.message ?? 'Upload failed.'
+    logoError.value = e.response?.data?.message ?? 'Upload failed. Please try again.'
   } finally {
     logoUploading.value = false
-    e.target.value = ''
+  }
+}
+
+async function onLogoChange(e) {
+  await uploadFile(e.target.files[0])
+  e.target.value = ''
+}
+
+async function onDrop(e) {
+  dragOver.value = false
+  await uploadFile(e.dataTransfer.files[0])
+}
+
+function removeLogo() {
+  form.value.logo_url = ''
+}
+
+const backingUp   = ref(false)
+const backupError = ref('')
+
+async function downloadBackup() {
+  backingUp.value   = true
+  backupError.value = ''
+  try {
+    const token = document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1]
+    const resp  = await fetch('/api/backup/download', {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        Accept: 'application/octet-stream',
+      },
+    })
+    if (!resp.ok) {
+      const json = await resp.json().catch(() => ({}))
+      backupError.value = json.message ?? `Server error ${resp.status}`
+      return
+    }
+    const filename = resp.headers.get('Content-Disposition')
+      ?.match(/filename="([^"]+)"/)?.[1] ?? 'backup.sql'
+    const blob = await resp.blob()
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    backupError.value = 'Download failed: ' + e.message
+  } finally {
+    backingUp.value = false
   }
 }
 

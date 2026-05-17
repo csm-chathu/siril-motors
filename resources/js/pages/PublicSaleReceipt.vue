@@ -24,7 +24,7 @@
       <div class="text-center mb-6">
         <img v-if="shop.logo_url" :src="shop.logo_url" alt="logo"
           class="h-14 mx-auto object-contain mb-3" />
-        <h1 class="text-xl font-bold uppercase tracking-wide text-gray-800">{{ shop.shop_name || 'Jewellery Store' }}</h1>
+        <h1 class="text-xl font-bold uppercase tracking-wide text-gray-800">{{ shop.shop_name || 'Siril Motors' }}</h1>
         <p v-if="shop.address" class="text-xs text-gray-500 mt-0.5">{{ shop.address }}</p>
         <p v-if="shop.phone" class="text-xs text-gray-500">{{ shop.phone }}</p>
       </div>

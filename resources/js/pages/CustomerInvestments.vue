@@ -133,7 +133,7 @@
             <!-- GL toggle -->
             <div class="border rounded-xl p-4 space-y-3">
               <label class="flex items-center gap-2.5 cursor-pointer select-none">
-                <input type="checkbox" v-model="createForm.post_to_gl" class="rounded text-gold-600 w-4 h-4" />
+                <input type="checkbox" v-model="createForm.post_to_gl" class="rounded text-blue-600 w-4 h-4" />
                 <span class="text-sm font-medium text-gray-700">Post to General Ledger (accounting)</span>
               </label>
               <p class="text-xs text-gray-400 -mt-1">Turn this on if you want the investment to appear in your accounts and reports.</p>
@@ -142,17 +142,11 @@
                 <div class="grid grid-cols-2 gap-4 pt-1">
                   <div>
                     <label class="form-label">Liability Account <span class="text-gray-400 font-normal">(owed back to owner)</span></label>
-                    <select v-model="createForm.liability_account_id" class="form-input">
-                      <option value="">Select…</option>
-                      <option v-for="a in liabilityAccounts" :key="a.id" :value="a.id">{{ a.code }} – {{ a.name }}</option>
-                    </select>
+                    <SearchableSelect v-model="createForm.liability_account_id" :options="liabilityAccountOptions" placeholder="Select account…" />
                   </div>
                   <div>
                     <label class="form-label">Received Into Account <span class="text-gray-400 font-normal">(cash / bank)</span></label>
-                    <select v-model="createForm.received_to_account_id" class="form-input">
-                      <option value="">Select…</option>
-                      <option v-for="a in assetAccounts" :key="a.id" :value="a.id">{{ a.code }} – {{ a.name }}</option>
-                    </select>
+                    <SearchableSelect v-model="createForm.received_to_account_id" :options="assetAccountOptions" placeholder="Select account…" />
                   </div>
                 </div>
                 <div class="bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700">
@@ -193,10 +187,7 @@
               </div>
               <div>
                 <label class="form-label">Paid From Account *</label>
-                <select v-model="repayForm.paid_from_account_id" class="form-input">
-                  <option value="">Select…</option>
-                  <option v-for="a in assetAccounts" :key="a.id" :value="a.id">{{ a.code }} – {{ a.name }}</option>
-                </select>
+                <SearchableSelect v-model="repayForm.paid_from_account_id" :options="assetAccountOptions" placeholder="Select account…" />
               </div>
               <div>
                 <label class="form-label">Principal Repaid (LKR)</label>
@@ -269,6 +260,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { PlusIcon } from '@heroicons/vue/24/outline'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 
 const loans    = ref({ data: [], total: 0, last_page: 1 })
 const accounts = ref([])
@@ -287,6 +279,8 @@ const historyData = ref(null)
 
 const liabilityAccounts = computed(() => accounts.value.filter(a => a.type === 'liability'))
 const assetAccounts     = computed(() => accounts.value.filter(a => a.type === 'asset'))
+const liabilityAccountOptions = computed(() => liabilityAccounts.value.map(a => ({ id: a.id, name: a.name, sub: a.code })))
+const assetAccountOptions     = computed(() => assetAccounts.value.map(a => ({ id: a.id, name: a.name, sub: a.code })))
 
 const totalReceived    = computed(() => (loans.value.data ?? []).reduce((s, l) => s + (l.principal_amount || 0), 0))
 const totalOutstanding = computed(() => (loans.value.data ?? []).reduce((s, l) => s + (l.outstanding_balance || 0), 0))

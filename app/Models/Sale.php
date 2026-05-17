@@ -13,11 +13,10 @@ class Sale extends Model
 
     protected $fillable = [
         'branch_id', 'invoice_number', 'customer_id', 'user_id', 'subtotal',
-        'discount', 'tax', 'gold_value_total', 'gemstone_value_total',
-        'making_charges_total', 'wastage_total', 'tax_rate', 'total',
+        'discount', 'tax', 'tax_rate', 'maintenance_amount', 'total',
         'payment_method', 'payment_status', 'sale_type', 'delivery_status',
         'booking_expires_at', 'delivered_at', 'amount_paid', 'notes',
-        'journal_entry_id', 'sold_at', 'view_token',
+        'is_draft', 'journal_entry_id', 'sold_at', 'view_token',
     ];
 
     protected static function booted(): void
@@ -30,19 +29,17 @@ class Sale extends Model
     }
 
     protected $casts = [
-        'sold_at'    => 'datetime',
+        'sold_at'            => 'datetime',
         'booking_expires_at' => 'date',
-        'delivered_at' => 'datetime',
-        'subtotal'   => 'float',
-        'discount'   => 'float',
-        'tax'        => 'float',
-        'gold_value_total' => 'float',
-        'gemstone_value_total' => 'float',
-        'making_charges_total' => 'float',
-        'wastage_total' => 'float',
-        'tax_rate'    => 'float',
-        'total'      => 'float',
-        'amount_paid'=> 'float',
+        'delivered_at'       => 'datetime',
+        'subtotal'            => 'float',
+        'discount'            => 'float',
+        'tax'                 => 'float',
+        'tax_rate'            => 'float',
+        'maintenance_amount'  => 'float',
+        'total'               => 'float',
+        'amount_paid'         => 'float',
+        'is_draft'            => 'boolean',
     ];
 
     public function customer()

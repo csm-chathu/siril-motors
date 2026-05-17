@@ -31,4 +31,9 @@ class Supplier extends Model
     {
         return $this->belongsTo(Branch::class);
     }
+
+    public function spareParts()
+    {
+        return $this->hasMany(SparePart::class);
+    }
 }

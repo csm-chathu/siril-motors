@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Customer;
-use App\Models\GoldRate;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use App\Models\Product;
@@ -23,11 +22,19 @@ class SaleController extends Controller
     public function index()
     {
         $user = request()->user();
-        $sales = Sale::with(['customer:id,name', 'user:id,name', 'journalEntry:id,entry_number'])
+        $statusFilter = request('status');
+        $sales = Sale::with(['customer:id,name,phone,vehicle_number', 'user:id,name', 'journalEntry:id,entry_number'])
             ->when(!$user->isAdmin(), fn($q) => $q->where('branch_id', $user->branch_id))
-            ->when(request('search'), fn($q, $s) => $q->where('invoice_number', 'like', "%$s%"))
+            ->when(request('search'), fn($q, $s) => $q->where(function ($q) use ($s) {
+                $q->where('invoice_number', 'like', "%$s%")
+                  ->orWhereHas('customer', fn($cq) => $cq->where('name', 'like', "%$s%")
+                      ->orWhere('vehicle_number', 'like', "%$s%")
+                      ->orWhere('phone', 'like', "%$s%"));
+            }))
             ->when(request('customer_id'), fn($q, $c) => $q->where('customer_id', $c))
-            ->when(request('status'), fn($q, $s) => $q->where('payment_status', $s))
+            ->when($statusFilter === 'draft', fn($q) => $q->where('is_draft', true))
+            ->when($statusFilter && $statusFilter !== 'draft', fn($q) => $q->where('payment_status', $statusFilter)->where('is_draft', false))
+            ->when(!$statusFilter, fn($q) => $q)
             ->when(request('sale_type'), fn($q, $s) => $q->where('sale_type', $s))
             ->when(request('date_from'), fn($q, $d) => $q->whereDate('sold_at', '>=', $d))
             ->when(request('date_to'), fn($q, $d) => $q->whereDate('sold_at', '<=', $d))
@@ -39,109 +46,62 @@ class SaleController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'customer_id'              => 'nullable|exists:customers,id',
-            'items'                    => 'required|array|min:1',
-            'items.*.product_id'       => 'required|exists:products,id',
-            'items.*.quantity'         => 'required|integer|min:1',
-            'items.*.unit_price'       => 'required|numeric|min:0',
-            'items.*.discount'         => 'nullable|numeric|min:0',
-            'items.*.making_charge'    => 'nullable|numeric|min:0',
-            'items.*.wastage_amount'   => 'nullable|numeric|min:0',
-            'items.*.gold_value'       => 'nullable|numeric|min:0',
-            'items.*.gemstone_value'   => 'nullable|numeric|min:0',
-            'discount'                 => 'nullable|numeric|min:0',
-            'tax'                      => 'nullable|numeric|min:0',
-            'tax_rate'                 => 'nullable|numeric|min:0|max:100',
-            'payment_method'           => 'required|in:cash,card,bank_transfer,cheque,other',
-            'payment_status'           => 'required|in:pending,paid,partial,refunded',
-            'sale_type'                => 'nullable|in:instant,booking',
-            'booking_expires_at'       => 'nullable|date',
-            'amount_paid'              => 'required|numeric|min:0',
-            'notes'                    => 'nullable|string',
-            'sold_at'                  => 'nullable|date',
+            'customer_id'        => 'nullable|exists:customers,id',
+            'items'              => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity'   => 'required|integer|min:1',
+            'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.discount'   => 'nullable|numeric|min:0',
+            'discount'           => 'nullable|numeric|min:0',
+            'tax'                => 'nullable|numeric|min:0',
+            'tax_rate'           => 'nullable|numeric|min:0|max:100',
+            'maintenance_amount' => 'nullable|numeric|min:0',
+            'payment_method'     => 'required|in:cash,card,bank_transfer,cheque,other',
+            'payment_status'     => 'required|in:pending,paid,partial,refunded',
+            'sale_type'          => 'nullable|in:instant,booking',
+            'booking_expires_at' => 'nullable|date',
+            'amount_paid'        => 'required|numeric|min:0',
+            'notes'              => 'nullable|string',
+            'sold_at'            => 'nullable|date',
+            'is_draft'           => 'nullable|boolean',
         ]);
 
         DB::beginTransaction();
         try {
-            $goldRates = GoldRate::todayRatesByLabel(); // ['24k' => GoldRate, ...]
-            $subtotal  = 0;
-            $goldTotal = 0; $gemTotal = 0; $mcTotal = 0; $wasteTotal = 0;
-
-            // Pre-validate items
+            $isDraft  = !empty($data['is_draft']);
+            $subtotal = 0;
             $itemData = [];
+
             foreach ($data['items'] as $item) {
                 $product = Product::findOrFail($item['product_id']);
+
                 if (!$request->user()->isAdmin() && $product->branch_id !== $request->user()->branch_id) {
                     throw new \Exception("Product not available for your branch: {$product->name}");
                 }
-                if ($product->stock_quantity < $item['quantity']) {
+                if (!$isDraft && $product->stock_quantity < $item['quantity']) {
                     throw new \Exception("Insufficient stock for: {$product->name}");
                 }
 
-                $qty         = $item['quantity'];
-                $unitPrice   = $item['unit_price'];
-                $itemDisc    = $item['discount'] ?? 0;
-
-                // Making charge
-                $mc = $item['making_charge'] ?? 0;
-                if ($mc == 0 && $product->making_charge > 0) {
-                    $mc = match($product->making_charge_type) {
-                        'per_gram'   => $product->making_charge * ($product->weight ?? 0) * $qty,
-                        'per_piece'  => $product->making_charge * $qty,
-                        'percentage' => ($unitPrice * $qty) * ($product->making_charge / 100),
-                        default      => 0,
-                    };
-                }
-
-                // Resolve today's rate for this product's karat
-                $karatKey  = strtolower($product->karat ?? '24k');
-                $karatRate = $goldRates[$karatKey] ?? null;
-                $rate24k   = $goldRates['24k'] ?? null;
-
-                // Wastage
-                $wastage = $item['wastage_amount'] ?? 0;
-                if ($wastage == 0 && $product->wastage_percent > 0 && $product->weight) {
-                    $ratePerGram = $karatRate?->rate_per_gram
-                        ?? ($rate24k ? $rate24k->rate_per_gram * GoldRate::purityForLabel($karatKey) : null);
-                    $wastage = $ratePerGram
-                        ? round($ratePerGram * ($product->weight * $product->wastage_percent / 100) * $qty, 2)
-                        : 0;
-                }
-
-                // Gold value from rate
-                $goldV = $item['gold_value'] ?? 0;
-                if ($goldV == 0 && $product->weight && $product->karat) {
-                    $ratePerGram = $karatRate?->rate_per_gram
-                        ?? ($rate24k ? $rate24k->rate_per_gram * GoldRate::purityForLabel($karatKey) : null);
-                    if ($ratePerGram) {
-                        $goldV = round($ratePerGram * $product->weight, 2) * $qty;
-                    }
-                }
-
-                // Gemstone value
-                $gemV = $item['gemstone_value'] ?? ($product->gemstone_value * $qty);
-
+                $qty       = $item['quantity'];
+                $unitPrice = $item['unit_price'];
+                $itemDisc  = $item['discount'] ?? 0;
                 $lineTotal = ($unitPrice * $qty) - $itemDisc;
 
-                $subtotal   += $lineTotal;
-                $goldTotal  += $goldV;
-                $gemTotal   += $gemV;
-                $mcTotal    += $mc;
-                $wasteTotal += $wastage;
-
-                $itemData[] = compact('product', 'qty', 'unitPrice', 'itemDisc', 'lineTotal', 'goldV', 'gemV', 'mc', 'wastage');
+                $subtotal += $lineTotal;
+                $itemData[] = compact('product', 'qty', 'unitPrice', 'itemDisc', 'lineTotal');
             }
 
-            $discount = $data['discount'] ?? 0;
-            $tax      = $data['tax'] ?? 0;
-            $total    = $subtotal - $discount + $tax;
-            $amountPaid = (float) ($data['amount_paid'] ?? 0);
+            $discount          = $data['discount'] ?? 0;
+            $tax               = $data['tax'] ?? 0;
+            $maintenanceAmount = $data['maintenance_amount'] ?? 0;
+            $total             = $subtotal - $discount + $tax + $maintenanceAmount;
+            $amountPaid        = (float) ($data['amount_paid'] ?? 0);
+            $saleType          = $data['sale_type'] ?? 'instant';
+            $soldAt            = !empty($data['sold_at']) ? Carbon::parse($data['sold_at']) : now();
 
-            $saleType = $data['sale_type'] ?? 'instant';
-            $soldAt = !empty($data['sold_at']) ? Carbon::parse($data['sold_at']) : now();
             $bookingExpiresAt = null;
-            $deliveryStatus = 'delivered';
-            $deliveredAt = $soldAt;
+            $deliveryStatus   = 'delivered';
+            $deliveredAt      = $soldAt;
 
             if ($saleType === 'booking') {
                 if (empty($data['customer_id'])) {
@@ -157,7 +117,7 @@ class SaleController extends Controller
                 }
 
                 $deliveryStatus = 'booked';
-                $deliveredAt = null;
+                $deliveredAt    = null;
             }
 
             if (!$request->user()->isAdmin() && !empty($data['customer_id'])) {
@@ -167,56 +127,57 @@ class SaleController extends Controller
                 }
             }
 
+            $invoicePrefix  = $isDraft ? 'DRAFT' : 'INV';
+            $invoiceNumber  = $invoicePrefix . '-' . now()->format('Ymd') . '-' . str_pad(Sale::whereDate('created_at', today())->withTrashed()->count() + 1, 4, '0', STR_PAD_LEFT);
+
             $sale = Sale::create([
-                'branch_id'             => $request->user()->branch_id,
-                'invoice_number'        => 'INV-' . now()->format('Ymd') . '-' . str_pad(Sale::whereDate('created_at', today())->count() + 1, 4, '0', STR_PAD_LEFT),
-                'customer_id'           => $data['customer_id'] ?? null,
-                'user_id'               => $request->user()->id,
-                'subtotal'              => $subtotal,
-                'discount'              => $discount,
-                'tax'                   => $tax,
-                'tax_rate'              => $data['tax_rate'] ?? 0,
-                'total'                 => $total,
-                'gold_value_total'      => $goldTotal,
-                'gemstone_value_total'  => $gemTotal,
-                'making_charges_total'  => $mcTotal,
-                'wastage_total'         => $wasteTotal,
-                'payment_method'        => $data['payment_method'],
-                'payment_status'        => $data['payment_status'],
-                'sale_type'             => $saleType,
-                'delivery_status'       => $deliveryStatus,
-                'booking_expires_at'    => $bookingExpiresAt,
-                'delivered_at'          => $deliveredAt,
-                'amount_paid'           => $amountPaid,
-                'notes'                 => $data['notes'] ?? null,
-                'sold_at'               => $soldAt,
+                'branch_id'          => $request->user()->branch_id,
+                'invoice_number'     => $invoiceNumber,
+                'customer_id'        => $data['customer_id'] ?? null,
+                'user_id'            => $request->user()->id,
+                'subtotal'           => $subtotal,
+                'discount'           => $discount,
+                'tax'                => $tax,
+                'tax_rate'           => $data['tax_rate'] ?? 0,
+                'maintenance_amount' => $maintenanceAmount,
+                'total'              => $total,
+                'payment_method'     => $data['payment_method'],
+                'payment_status'     => $data['payment_status'],
+                'sale_type'          => $saleType,
+                'delivery_status'    => $deliveryStatus,
+                'booking_expires_at' => $bookingExpiresAt,
+                'delivered_at'       => $deliveredAt,
+                'amount_paid'        => $amountPaid,
+                'notes'              => $data['notes'] ?? null,
+                'sold_at'            => $soldAt,
+                'is_draft'           => $isDraft,
             ]);
 
             foreach ($itemData as $i) {
                 SaleItem::create([
-                    'sale_id'        => $sale->id,
-                    'product_id'     => $i['product']->id,
-                    'quantity'       => $i['qty'],
-                    'unit_price'     => $i['unitPrice'],
-                    'discount'       => $i['itemDisc'],
-                    'total'          => $i['lineTotal'],
-                    'gold_value'     => $i['goldV'],
-                    'gemstone_value' => $i['gemV'],
-                    'making_charge'  => $i['mc'],
-                    'wastage_amount' => $i['wastage'],
+                    'sale_id'    => $sale->id,
+                    'product_id' => $i['product']->id,
+                    'quantity'   => $i['qty'],
+                    'unit_price' => $i['unitPrice'],
+                    'discount'   => $i['itemDisc'],
+                    'total'      => $i['lineTotal'],
                 ]);
-                $i['product']->decrement('stock_quantity', $i['qty']);
+                if (!$isDraft) {
+                    $i['product']->decrement('stock_quantity', $i['qty']);
+                }
             }
 
-            if ($saleType === 'instant') {
-                $entry = $this->postInstantSaleJournal($sale);
-                $sale->update(['journal_entry_id' => $entry->id]);
-            } elseif ($amountPaid > 0) {
-                $entry = $this->postBookingAdvanceJournal($sale);
-                $sale->update(['journal_entry_id' => $entry->id]);
+            if (!$isDraft) {
+                if ($saleType === 'instant') {
+                    $entry = $this->postInstantSaleJournal($sale, $itemData);
+                    $sale->update(['journal_entry_id' => $entry->id]);
+                } elseif ($amountPaid > 0) {
+                    $entry = $this->postBookingAdvanceJournal($sale);
+                    $sale->update(['journal_entry_id' => $entry->id]);
+                }
             }
 
-            AuditLog::record('sale_created', "Sale {$sale->invoice_number} — LKR {$total}", $sale);
+            AuditLog::record('sale_created', ($isDraft ? 'Draft' : 'Sale') . " {$sale->invoice_number} — LKR {$total}", $sale);
 
             DB::commit();
             return response()->json($sale->load(['items.product', 'customer', 'user']), 201);
@@ -229,7 +190,7 @@ class SaleController extends Controller
     public function show(Sale $sale)
     {
         $this->authorizeBranch($sale->branch_id);
-        return response()->json($sale->load(['items.product', 'customer', 'user', 'journalEntry']));
+        return response()->json($sale->load(['items.product', 'customer:id,name,phone,email,vehicle_number', 'user', 'journalEntry']));
     }
 
     public function settleBooking(Request $request, Sale $sale)
@@ -239,11 +200,9 @@ class SaleController extends Controller
         if ($sale->sale_type !== 'booking') {
             return response()->json(['message' => 'Only booking sales can be settled with this endpoint.'], 422);
         }
-
         if ($sale->delivery_status !== 'booked') {
             return response()->json(['message' => 'This booking is already delivered or cancelled.'], 422);
         }
-
         if ($sale->booking_expires_at && now()->startOfDay()->gt($sale->booking_expires_at)) {
             return response()->json(['message' => 'Booking period has expired. Please create a new sale.'], 422);
         }
@@ -255,7 +214,7 @@ class SaleController extends Controller
             'notes'          => 'nullable|string|max:1000',
         ]);
 
-        $remaining = round(max(0, $sale->total - $sale->amount_paid), 2);
+        $remaining     = round(max(0, $sale->total - $sale->amount_paid), 2);
         $paymentAmount = round((float) $data['payment_amount'], 2);
 
         if (abs($paymentAmount - $remaining) > 0.01) {
@@ -267,13 +226,13 @@ class SaleController extends Controller
             $entry = $this->postBookingSettlementJournal($sale, $paymentAmount, $data['payment_method']);
 
             $sale->update([
-                'amount_paid'     => $sale->total,
-                'payment_status'  => 'paid',
-                'payment_method'  => $data['payment_method'],
-                'delivery_status' => 'delivered',
-                'delivered_at'    => !empty($data['delivered_at']) ? Carbon::parse($data['delivered_at']) : now(),
-                'journal_entry_id'=> $entry->id,
-                'notes'           => $data['notes'] ?? $sale->notes,
+                'amount_paid'      => $sale->total,
+                'payment_status'   => 'paid',
+                'payment_method'   => $data['payment_method'],
+                'delivery_status'  => 'delivered',
+                'delivered_at'     => !empty($data['delivered_at']) ? Carbon::parse($data['delivered_at']) : now(),
+                'journal_entry_id' => $entry->id,
+                'notes'            => $data['notes'] ?? $sale->notes,
             ]);
 
             AuditLog::record('sale_booking_settled', "Booking {$sale->invoice_number} settled and delivered", $sale);
@@ -286,10 +245,9 @@ class SaleController extends Controller
         }
     }
 
-    /** Public receipt view — no auth required, keyed by view_token */
     public function publicView(string $token)
     {
-        $sale = Sale::with(['items.product:id,name,sku,karat,weight', 'customer:id,name,phone,email'])
+        $sale = Sale::with(['items.product:id,name,sku', 'customer:id,name,phone,email,vehicle_number'])
             ->where('view_token', $token)
             ->firstOrFail();
 
@@ -306,7 +264,6 @@ class SaleController extends Controller
         ]);
     }
 
-    /** Send (or resend) receipt SMS — phone can be overridden in the request body */
     public function sendSms(Request $request, Sale $sale)
     {
         $data = $request->validate([
@@ -314,7 +271,6 @@ class SaleController extends Controller
             'message' => 'nullable|string|max:500',
         ]);
 
-        // Resolve phone: use override → customer phone → error
         $phone = trim($data['phone'] ?? '');
         if (!$phone && $sale->customer_id) {
             $phone = optional($sale->customer ?? $sale->load('customer')->customer)->phone ?? '';
@@ -344,22 +300,162 @@ class SaleController extends Controller
         return response()->json(['message' => 'SMS sent successfully.', 'phone' => $phone]);
     }
 
+    public function update(Request $request, Sale $sale)
+    {
+        $this->authorizeBranch($sale->branch_id);
+
+        if (!$sale->is_draft) {
+            return response()->json(['message' => 'Only draft sales can be edited.'], 422);
+        }
+
+        $data = $request->validate([
+            'customer_id'        => 'nullable|exists:customers,id',
+            'items'              => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity'   => 'required|integer|min:1',
+            'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.discount'   => 'nullable|numeric|min:0',
+            'discount'           => 'nullable|numeric|min:0',
+            'tax'                => 'nullable|numeric|min:0',
+            'tax_rate'           => 'nullable|numeric|min:0|max:100',
+            'maintenance_amount' => 'nullable|numeric|min:0',
+            'payment_method'     => 'required|in:cash,card,bank_transfer,cheque,other',
+            'payment_status'     => 'required|in:pending,paid,partial,refunded',
+            'sale_type'          => 'nullable|in:instant,booking',
+            'amount_paid'        => 'nullable|numeric|min:0',
+            'notes'              => 'nullable|string',
+            'sold_at'            => 'nullable|date',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $subtotal = 0;
+            $itemData = [];
+
+            foreach ($data['items'] as $item) {
+                $qty       = $item['quantity'];
+                $unitPrice = $item['unit_price'];
+                $itemDisc  = $item['discount'] ?? 0;
+                $lineTotal = ($unitPrice * $qty) - $itemDisc;
+                $subtotal += $lineTotal;
+                $itemData[] = [
+                    'product_id' => $item['product_id'],
+                    'quantity'   => $qty,
+                    'unit_price' => $unitPrice,
+                    'discount'   => $itemDisc,
+                    'total'      => $lineTotal,
+                ];
+            }
+
+            $discount          = $data['discount'] ?? 0;
+            $tax               = $data['tax'] ?? 0;
+            $maintenanceAmount = $data['maintenance_amount'] ?? 0;
+            $total             = $subtotal - $discount + $tax + $maintenanceAmount;
+
+            $sale->items()->delete();
+
+            foreach ($itemData as $row) {
+                SaleItem::create(array_merge(['sale_id' => $sale->id], $row));
+            }
+
+            $sale->update([
+                'customer_id'        => $data['customer_id'] ?? null,
+                'subtotal'           => $subtotal,
+                'discount'           => $discount,
+                'tax'                => $tax,
+                'tax_rate'           => $data['tax_rate'] ?? 0,
+                'maintenance_amount' => $maintenanceAmount,
+                'total'              => $total,
+                'payment_method'     => $data['payment_method'],
+                'payment_status'     => $data['payment_status'],
+                'sale_type'          => $data['sale_type'] ?? $sale->sale_type,
+                'amount_paid'        => $data['amount_paid'] ?? 0,
+                'notes'              => $data['notes'] ?? null,
+                'sold_at'            => !empty($data['sold_at']) ? Carbon::parse($data['sold_at']) : $sale->sold_at,
+            ]);
+
+            AuditLog::record('draft_updated', "Draft {$sale->invoice_number} updated — LKR {$total}", $sale);
+            DB::commit();
+
+            return response()->json($sale->fresh(['items.product', 'customer', 'user']));
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function finalize(Sale $sale)
+    {
+        $this->authorizeBranch($sale->branch_id);
+
+        if (!$sale->is_draft) {
+            return response()->json(['message' => 'This sale is already finalized.'], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            foreach ($sale->items as $item) {
+                if ($item->product->stock_quantity < $item->quantity) {
+                    throw new \Exception("Insufficient stock for: {$item->product->name}");
+                }
+            }
+
+            $invoiceNumber = 'INV-' . now()->format('Ymd') . '-' . str_pad(Sale::whereDate('created_at', today())->withTrashed()->count() + 1, 4, '0', STR_PAD_LEFT);
+
+            foreach ($sale->items as $item) {
+                $item->product->decrement('stock_quantity', $item->quantity);
+            }
+
+            $sale->update([
+                'is_draft'       => false,
+                'invoice_number' => $invoiceNumber,
+                'sold_at'        => $sale->sold_at ?? now(),
+            ]);
+
+            $itemData = $sale->items->map(fn($si) => [
+                'product'   => $si->product,
+                'qty'       => $si->quantity,
+                'unitPrice' => $si->unit_price,
+                'itemDisc'  => $si->discount,
+                'lineTotal'  => $si->total,
+            ])->all();
+
+            if ($sale->sale_type === 'instant') {
+                $entry = $this->postInstantSaleJournal($sale, $itemData);
+                $sale->update(['journal_entry_id' => $entry->id]);
+            } elseif ($sale->amount_paid > 0) {
+                $entry = $this->postBookingAdvanceJournal($sale);
+                $sale->update(['journal_entry_id' => $entry->id]);
+            }
+
+            AuditLog::record('sale_finalized', "Draft {$sale->invoice_number} finalized", $sale);
+            DB::commit();
+
+            return response()->json($sale->fresh(['items.product', 'customer', 'user']));
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
     public function destroy(Sale $sale)
     {
         $this->authorizeBranch($sale->branch_id);
-        if (!request()->user()->canDeleteTransactions()) {
+        if (!$sale->is_draft && !request()->user()->canDeleteTransactions()) {
             abort(403, 'You do not have permission to delete transactions.');
         }
         DB::beginTransaction();
         try {
-            foreach ($sale->items as $item) {
-                $item->product->increment('stock_quantity', $item->quantity);
+            if (!$sale->is_draft) {
+                foreach ($sale->items as $item) {
+                    $item->product->increment('stock_quantity', $item->quantity);
+                }
             }
-            AuditLog::record('sale_deleted', "Sale {$sale->invoice_number} deleted, stock restored", $sale,
+            AuditLog::record('sale_deleted', "Sale {$sale->invoice_number} deleted" . ($sale->is_draft ? ' (draft)' : ', stock restored'), $sale,
                 ['invoice' => $sale->invoice_number, 'total' => $sale->total]);
             $sale->delete();
             DB::commit();
-            return response()->json(['message' => 'Sale deleted and stock restored']);
+            return response()->json(['message' => $sale->is_draft ? 'Draft deleted' : 'Sale deleted and stock restored']);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['message' => $e->getMessage()], 422);
@@ -379,11 +475,9 @@ class SaleController extends Controller
         if ($method === 'cash') {
             return Account::where('code', '1000')->first();
         }
-
         if (in_array($method, ['bank_transfer', 'card', 'cheque', 'other'])) {
             return Account::where('code', '1010')->first();
         }
-
         return null;
     }
 
@@ -393,25 +487,21 @@ class SaleController extends Controller
         return 'JE-' . date('Ymd') . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
     }
 
-    private function postInstantSaleJournal(Sale $sale): JournalEntry
+    private function postInstantSaleJournal(Sale $sale, array $itemData = []): JournalEntry
     {
-        $revenue = Account::where('code', '4000')->first();
+        $revenue    = Account::where('code', '4000')->first();
+        $cogs       = Account::where('code', '5000')->first();
+        $inventory  = Account::where('code', '1200')->first();
         $receivable = Account::where('code', '1100')->first();
         $paidAccount = $this->paymentAccountByMethod($sale->payment_method);
 
-        if (!$revenue) {
-            throw new \Exception('Revenue account (4000) is missing.');
-        }
+        if (!$revenue) throw new \Exception('Revenue account (4000) is missing.');
 
         $paid = round(min($sale->amount_paid, $sale->total), 2);
-        $due = round(max(0, $sale->total - $paid), 2);
+        $due  = round(max(0, $sale->total - $paid), 2);
 
-        if ($paid > 0 && !$paidAccount) {
-            throw new \Exception('Payment account could not be resolved for this method.');
-        }
-        if ($due > 0 && !$receivable) {
-            throw new \Exception('Accounts receivable account (1100) is missing.');
-        }
+        if ($paid > 0 && !$paidAccount) throw new \Exception('Payment account could not be resolved for this method.');
+        if ($due > 0 && !$receivable)   throw new \Exception('Accounts receivable account (1100) is missing.');
 
         $entry = JournalEntry::create([
             'entry_number'   => $this->nextEntryNumber(),
@@ -433,7 +523,6 @@ class SaleController extends Controller
                 'description'      => 'Cash/Bank received for sale',
             ]);
         }
-
         if ($due > 0) {
             JournalEntryLine::create([
                 'journal_entry_id' => $entry->id,
@@ -452,12 +541,43 @@ class SaleController extends Controller
             'description'      => 'Sales revenue',
         ]);
 
+        // COGS: Dr Cost of Goods Sold / Cr Inventory
+        if ($cogs && $inventory) {
+            $costTotal = round(collect($itemData)->sum(
+                fn($i) => ($i['product']->purchase_price ?? 0) * $i['qty']
+            ), 2);
+
+            if ($costTotal <= 0) {
+                // Fallback: load from DB if itemData not passed
+                $costTotal = round($sale->items()->with('product:id,purchase_price')->get()->sum(
+                    fn($si) => ($si->product->purchase_price ?? 0) * $si->quantity
+                ), 2);
+            }
+
+            if ($costTotal > 0) {
+                JournalEntryLine::create([
+                    'journal_entry_id' => $entry->id,
+                    'account_id'       => $cogs->id,
+                    'debit'            => $costTotal,
+                    'credit'           => 0,
+                    'description'      => 'Cost of goods sold',
+                ]);
+                JournalEntryLine::create([
+                    'journal_entry_id' => $entry->id,
+                    'account_id'       => $inventory->id,
+                    'debit'            => 0,
+                    'credit'           => $costTotal,
+                    'description'      => 'Inventory reduced for sale',
+                ]);
+            }
+        }
+
         return $entry;
     }
 
     private function postBookingAdvanceJournal(Sale $sale): JournalEntry
     {
-        $deposit = Account::where('code', '2200')->first();
+        $deposit     = Account::where('code', '2200')->first();
         $paidAccount = $this->paymentAccountByMethod($sale->payment_method);
 
         if (!$deposit || !$paidAccount) {
@@ -482,7 +602,6 @@ class SaleController extends Controller
             'credit'           => 0,
             'description'      => 'Advance received from customer',
         ]);
-
         JournalEntryLine::create([
             'journal_entry_id' => $entry->id,
             'account_id'       => $deposit->id,
@@ -496,8 +615,10 @@ class SaleController extends Controller
 
     private function postBookingSettlementJournal(Sale $sale, float $paymentAmount, string $paymentMethod): JournalEntry
     {
-        $deposit = Account::where('code', '2200')->first();
-        $revenue = Account::where('code', '4000')->first();
+        $deposit     = Account::where('code', '2200')->first();
+        $revenue     = Account::where('code', '4000')->first();
+        $cogs        = Account::where('code', '5000')->first();
+        $inventory   = Account::where('code', '1200')->first();
         $paidAccount = $this->paymentAccountByMethod($paymentMethod);
 
         if (!$deposit || !$revenue || !$paidAccount) {
@@ -524,7 +645,6 @@ class SaleController extends Controller
                 'description'      => 'Final payment received for booking',
             ]);
         }
-
         if ($sale->amount_paid > 0) {
             JournalEntryLine::create([
                 'journal_entry_id' => $entry->id,
@@ -542,6 +662,30 @@ class SaleController extends Controller
             'credit'           => $sale->total,
             'description'      => 'Sales revenue recognized on delivery',
         ]);
+
+        // COGS: Dr Cost of Goods Sold / Cr Inventory on delivery
+        if ($cogs && $inventory) {
+            $costTotal = round($sale->items()->with('product:id,purchase_price')->get()->sum(
+                fn($si) => ($si->product->purchase_price ?? 0) * $si->quantity
+            ), 2);
+
+            if ($costTotal > 0) {
+                JournalEntryLine::create([
+                    'journal_entry_id' => $entry->id,
+                    'account_id'       => $cogs->id,
+                    'debit'            => $costTotal,
+                    'credit'           => 0,
+                    'description'      => 'Cost of goods sold on delivery',
+                ]);
+                JournalEntryLine::create([
+                    'journal_entry_id' => $entry->id,
+                    'account_id'       => $inventory->id,
+                    'debit'            => 0,
+                    'credit'           => $costTotal,
+                    'description'      => 'Inventory reduced on delivery',
+                ]);
+            }
+        }
 
         return $entry;
     }

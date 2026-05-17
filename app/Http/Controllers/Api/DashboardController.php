@@ -58,10 +58,10 @@ class DashboardController extends Controller
                 ->orderByDesc('total_sold')
                 ->take(5)
                 ->get(),
-            'low_stock' => (clone $productsQuery)->with('category:id,name')
+            'low_stock' => (clone $productsQuery)->with('partCategory:id,name')
                 ->whereColumn('stock_quantity', '<=', 'min_stock_level')
                 ->take(10)
-                ->get(['id', 'name', 'sku', 'stock_quantity', 'min_stock_level', 'category_id']),
+                ->get(['id', 'name', 'sku', 'stock_quantity', 'min_stock_level', 'part_category_id']),
             'recent_sales' => (clone $salesQuery)->with('customer:id,name')
                 ->latest('sold_at')
                 ->take(5)

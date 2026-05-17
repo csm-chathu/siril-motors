@@ -10,9 +10,9 @@
           alt="Shop logo"
           class="h-9 w-9 object-contain rounded"
         />
-        <span v-else class="text-2xl">💎</span>
+        <span v-else class="text-2xl">🔧</span>
         <div>
-          <p class="font-bold text-gold-400 text-sm leading-tight truncate">{{ branding.shop_name }}</p>
+          <p class="font-bold text-blue-400 text-sm leading-tight truncate">{{ branding.shop_name }}</p>
           <p class="text-xs text-gray-400">Management System</p>
         </div>
       </div>
@@ -25,21 +25,32 @@
         <router-link v-for="item in visibleNavItems" :key="item.to" :to="item.to"
           class="flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors"
           :class="isNavActive(item.to)
-            ? 'bg-gold-600 text-white hover:bg-gold-700'
+            ? 'bg-blue-600 text-white hover:bg-blue-700'
             : 'text-gray-300 hover:bg-gray-800 hover:text-white'">
           <component :is="item.icon" class="w-5 h-5 shrink-0" />
           {{ item.label }}
         </router-link>
 
+        <!-- Purchasing section -->
+        <template v-if="visiblePurchasingNavItems.length">
+          <div class="px-4 mt-4 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Purchasing</div>
+          <router-link v-for="item in visiblePurchasingNavItems" :key="item.to" :to="item.to"
+            class="flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors"
+            :class="isNavActive(item.to)
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'text-gray-300 hover:bg-gray-800 hover:text-white'">
+            <component :is="item.icon" class="w-5 h-5 shrink-0" />
+            {{ item.label }}
+          </router-link>
+        </template>
+
         <!-- Admin/Role-based sections -->
         <template v-if="visibleAdminNavItems.length">
-          <div class="px-4 mt-4 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            {{ currentRole === 'gold_buyer' ? 'Gold Purchasing' : 'Admin' }}
-          </div>
+          <div class="px-4 mt-4 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Admin</div>
           <router-link v-for="item in visibleAdminNavItems" :key="item.to" :to="item.to"
             class="flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors"
             :class="isNavActive(item.to)
-              ? 'bg-gold-600 text-white hover:bg-gold-700'
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
               : 'text-gray-300 hover:bg-gray-800 hover:text-white'">
             <component :is="item.icon" class="w-5 h-5 shrink-0" />
             {{ item.label }}
@@ -51,7 +62,7 @@
           <router-link v-for="item in visibleAccountingNavItems" :key="item.to" :to="item.to"
             class="flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors"
             :class="isNavActive(item.to)
-              ? 'bg-gold-600 text-white hover:bg-gold-700'
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
               : 'text-gray-300 hover:bg-gray-800 hover:text-white'">
             <component :is="item.icon" class="w-5 h-5 shrink-0" />
             {{ item.label }}
@@ -63,7 +74,7 @@
           <router-link v-for="item in visibleHrNavItems" :key="item.to" :to="item.to"
             class="flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors"
             :class="isNavActive(item.to)
-              ? 'bg-gold-600 text-white hover:bg-gold-700'
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
               : 'text-gray-300 hover:bg-gray-800 hover:text-white'">
             <component :is="item.icon" class="w-5 h-5 shrink-0" />
             {{ item.label }}
@@ -75,7 +86,7 @@
           <router-link v-for="item in visibleFinanceNavItems" :key="item.to" :to="item.to"
             class="flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors"
             :class="isNavActive(item.to)
-              ? 'bg-gold-600 text-white hover:bg-gold-700'
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
               : 'text-gray-300 hover:bg-gray-800 hover:text-white'">
             <component :is="item.icon" class="w-5 h-5 shrink-0" />
             {{ item.label }}
@@ -86,7 +97,7 @@
       <!-- User info -->
       <div class="px-4 py-4 border-t border-gray-800">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full bg-gold-600 flex items-center justify-center text-sm font-bold">
+          <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold">
             {{ auth.user?.name?.charAt(0) }}
           </div>
           <div class="flex-1 min-w-0">
@@ -125,7 +136,7 @@ import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import {
-  HomeIcon, CubeIcon, TagIcon, UsersIcon,
+  HomeIcon, CubeIcon, UsersIcon, CircleStackIcon,
   TruckIcon, ShoppingCartIcon, ArchiveBoxIcon,
   ArrowRightOnRectangleIcon, SparklesIcon,
   UserGroupIcon, ChartBarIcon, ClipboardDocumentCheckIcon,
@@ -133,15 +144,16 @@ import {
   ScaleIcon, BookOpenIcon, DocumentTextIcon, PresentationChartBarIcon,
   BanknotesIcon, BuildingLibraryIcon, HomeModernIcon,
   ReceiptPercentIcon, Cog6ToothIcon, DevicePhoneMobileIcon, LockClosedIcon,
-  WrenchScrewdriverIcon,
-  SquaresPlusIcon,
+  WrenchScrewdriverIcon, SquaresPlusIcon,
+  ClipboardDocumentIcon, InboxArrowDownIcon, DocumentCurrencyDollarIcon,
+  ArrowUturnLeftIcon, CreditCardIcon, ChartBarSquareIcon,
 } from '@heroicons/vue/24/outline'
 
 const auth   = useAuthStore()
 const router = useRouter()
 const route  = useRoute()
 const branding = ref({
-  shop_name: import.meta.env.VITE_APP_NAME ?? 'Jewellery Store',
+  shop_name: import.meta.env.VITE_APP_NAME ?? 'Siril Motors',
   logo_url: '',
 })
 
@@ -149,28 +161,30 @@ const ALL_STANDARD = ['admin', 'manager', 'accountant', 'hr', 'finance', 'cashie
 
 const navItems = [
   { to: '/',           label: 'Dashboard',  icon: HomeIcon,          roles: ALL_STANDARD },
-  { to: '/products',   label: 'Products',   icon: CubeIcon,          roles: ALL_STANDARD },
-  { to: '/categories', label: 'Categories', icon: TagIcon,            roles: ALL_STANDARD },
-  { to: '/customers',  label: 'Customers',  icon: UsersIcon,          roles: ALL_STANDARD },
+  { to: '/products',    label: 'Parts Inventory', icon: CubeIcon,         roles: ALL_STANDARD },
+  { to: '/master-data', label: 'Master Data',    icon: CircleStackIcon,  roles: ['admin', 'manager'] },
+  { to: '/customers',   label: 'Customers',      icon: UsersIcon,        roles: ALL_STANDARD },
   { to: '/suppliers',  label: 'Suppliers',  icon: TruckIcon,          roles: ALL_STANDARD },
   { to: '/sales',      label: 'Sales',      icon: ShoppingCartIcon,  roles: ALL_STANDARD },
-  { to: '/purchases',  label: 'Purchases',  icon: ArchiveBoxIcon,    roles: ALL_STANDARD },
+]
+
+const purchasingNavItems = [
+  { to: '/purchase-orders',   label: 'Purchase Orders',   icon: ClipboardDocumentIcon,       roles: ALL_STANDARD },
+  { to: '/grn',               label: 'GRN',               icon: InboxArrowDownIcon,           roles: ALL_STANDARD },
+  { to: '/goods-invoices',    label: 'Goods Invoices',    icon: DocumentCurrencyDollarIcon,   roles: ALL_STANDARD },
+  { to: '/supplier-payments', label: 'Supplier Payments', icon: CreditCardIcon,               roles: ALL_STANDARD },
+  { to: '/purchase-returns',  label: 'Purchase Returns',  icon: ArrowUturnLeftIcon,           roles: ALL_STANDARD },
+  { to: '/stock-ledger',      label: 'Stock Ledger',      icon: ChartBarSquareIcon,           roles: ALL_STANDARD },
 ]
 
 const adminNavItems = [
-  { to: '/gold-rates', label: 'Gold Rates', icon: SparklesIcon, roles: ['admin', 'manager'] },
-  { to: '/buy-back', label: 'Buy-Back', icon: CurrencyDollarIcon, roles: ['admin', 'manager', 'cashier', 'branch'] },
-  { to: '/scrap', label: 'Scrap Gold', icon: FireIcon, roles: ['admin', 'manager'] },
-  { to: '/rework-orders', label: 'Rework / Jobs', icon: WrenchScrewdriverIcon, roles: ['admin', 'manager', 'cashier', 'branch'] },
-  { to: '/layaways', label: 'Layaways', icon: SquaresPlusIcon, roles: ['admin', 'manager', 'cashier', 'branch'] },
-  { to: '/reports', label: 'Reports', icon: ChartBarIcon, roles: ['admin', 'manager', 'accountant', 'auditor'] },
+  { to: '/reports', label: 'Reports', icon: ChartBarIcon, roles: ['admin', 'manager', 'accountant', 'auditor', 'finance'] },
   { to: '/day-end', label: 'Day End', icon: ClipboardDocumentCheckIcon, roles: ['admin', 'manager', 'cashier', 'branch'] },
   { to: '/audit-log', label: 'Audit Log', icon: ClipboardDocumentListIcon, roles: ['admin'] },
   { to: '/users', label: 'Users', icon: UserGroupIcon, roles: ['admin'] },
   { to: '/shop-settings', label: 'Shop Settings', icon: Cog6ToothIcon, roles: ['admin', 'manager'] },
   { to: '/expenses', label: 'Expenses', icon: ReceiptPercentIcon, roles: ['admin', 'manager', 'finance', 'auditor'] },
   { to: '/sms', label: 'SMS Centre', icon: DevicePhoneMobileIcon, roles: ['admin', 'manager'] },
-  { to: '/informal-purchases', label: 'Private Gold Book', icon: LockClosedIcon, roles: ['gold_buyer'] },
 ]
 
 const hrNavItems = [
@@ -179,10 +193,9 @@ const hrNavItems = [
 ]
 
 const financeNavItems = [
-  { to: '/loans', label: 'Business Loans', icon: BuildingLibraryIcon, roles: ['admin', 'manager', 'finance', 'auditor'] },
-  { to: '/customer-investments', label: 'Owner Investments', icon: CurrencyDollarIcon, roles: ['admin', 'manager', 'finance'] },
-  { to: '/rentals', label: 'Monthly Rentals', icon: HomeModernIcon, roles: ['admin', 'manager', 'finance', 'auditor'] },
-  { to: '/gold-loans', label: 'Gold Loans', icon: CurrencyDollarIcon, roles: ['admin', 'manager', 'finance', 'auditor'] },
+  { to: '/loans',               label: 'Business Loans',    icon: BuildingLibraryIcon, roles: ['admin', 'manager', 'finance', 'auditor'] },
+  { to: '/customer-investments',label: 'Owner Investments', icon: CurrencyDollarIcon,  roles: ['admin', 'manager', 'finance'] },
+  { to: '/rentals',             label: 'Monthly Rentals',   icon: HomeModernIcon,      roles: ['admin', 'manager', 'finance', 'auditor'] },
 ]
 
 const accountingNavItems = [
@@ -193,56 +206,53 @@ const accountingNavItems = [
 ]
 
 const currentRole = computed(() => auth.user?.role ?? 'branch')
-const canOverrideGoldRate = computed(() => !!auth.user?.can_override_gold_rate)
 
 function isAllowed(item) {
-  if (item.to === '/gold-rates') {
-    return item.roles.includes(currentRole.value) || canOverrideGoldRate.value
-  }
   return item.roles.includes(currentRole.value)
 }
 
 const visibleNavItems = computed(() => navItems.filter(isAllowed))
+const visiblePurchasingNavItems = computed(() => purchasingNavItems.filter(isAllowed))
 const visibleAdminNavItems = computed(() => adminNavItems.filter(isAllowed))
 const visibleAccountingNavItems = computed(() => accountingNavItems.filter(isAllowed))
 const visibleHrNavItems = computed(() => hrNavItems.filter(isAllowed))
 const visibleFinanceNavItems = computed(() => financeNavItems.filter(isAllowed))
 
 const pageTitles = {
-  dashboard:         'Dashboard',
-  products:          'Products',
-  categories:        'Categories',
-  customers:         'Customers',
-  suppliers:         'Suppliers',
-  sales:             'Sales',
-  'sales.new':       'New Sale',
-  purchases:         'Purchases',
-  'purchases.new':   'New Purchase',
-  'gold-rates':      'Gold Rate Management',
-  'users':           'User Management',
-  'shop-settings':   'Shop Settings',
-  'reports':         'Reports & Analytics',
-  'day-end':         'Day-End Reconciliation',
-  'audit-log':       'Audit Log',
-  'buy-back':        'Gold Buy-Back',
-  'scrap':           'Scrap Gold Management',
-  'expenses':        'Expense Management',
-  'sms':             'SMS Centre',
-  'accounts':        'Chart of Accounts',
-  'journal-entries': 'Journal Entries',
-  'general-ledger':  'General Ledger',
-  'employees':        'Employees',
-  'salary-payments':  'Salary Payments',
-  'loans':            'Business Loans',
-  'rentals':          'Monthly Rentals',
-  'gold-loans':            'Gold Loans',
-  'customer-investments':  'Owner Investments',
-  'rework-orders':        'Rework / Job Orders',
-  'layaways':             'Layaway / Installments',
-  'informal-purchases':   'Private Gold Book',
+  dashboard:              'Dashboard',
+  products:               'Parts Inventory',
+  'master-data':          'Master Data',
+  customers:              'Customers',
+  suppliers:              'Suppliers',
+  sales:                  'Sales',
+  'sales.new':            'New Sale',
+  'sales.edit':           'Edit Draft',
+  purchases:              'Purchases',
+  'purchases.new':        'New Purchase',
+  'purchase-orders':      'Purchase Orders',
+  grn:                    'Goods Received Notes',
+  'goods-invoices':       'Goods Invoices',
+  'supplier-payments':    'Supplier Payments',
+  'purchase-returns':     'Purchase Returns',
+  'stock-ledger':         'Stock Ledger',
+  users:                  'User Management',
+  'shop-settings':        'Shop Settings',
+  'day-end':              'Day-End Reconciliation',
+  'audit-log':            'Audit Log',
+  reports:                'Reports',
+  expenses:               'Expense Management',
+  sms:                    'SMS Centre',
+  accounts:               'Chart of Accounts',
+  'journal-entries':      'Journal Entries',
+  'general-ledger':       'General Ledger',
+  employees:              'Employees',
+  'salary-payments':      'Salary Payments',
+  loans:                  'Business Loans',
+  rentals:                'Monthly Rentals',
+  'customer-investments': 'Owner Investments',
 }
 
-const pageTitle  = computed(() => pageTitles[route.name] ?? 'Jewellery MS')
+const pageTitle  = computed(() => pageTitles[route.name] ?? 'Siril Motors')
 const currentDate = computed(() => new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }))
 
 onMounted(async () => {
