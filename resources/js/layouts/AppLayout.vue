@@ -117,7 +117,12 @@
       <!-- Top bar -->
       <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-gray-800">{{ pageTitle }}</h1>
-        <div class="flex items-center gap-2 text-sm text-gray-500">
+        <div class="flex items-center gap-3 text-sm text-gray-500">
+          <router-link to="/getting-started"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 font-medium text-xs transition-colors">
+            <QuestionMarkCircleIcon class="w-4 h-4" />
+            Getting Started
+          </router-link>
           <span>{{ currentDate }}</span>
         </div>
       </header>
@@ -146,7 +151,7 @@ import {
   ReceiptPercentIcon, Cog6ToothIcon, DevicePhoneMobileIcon, LockClosedIcon,
   WrenchScrewdriverIcon, SquaresPlusIcon,
   ClipboardDocumentIcon, InboxArrowDownIcon, DocumentCurrencyDollarIcon,
-  ArrowUturnLeftIcon, CreditCardIcon, ChartBarSquareIcon,
+  ArrowUturnLeftIcon, CreditCardIcon, ChartBarSquareIcon, QuestionMarkCircleIcon,
 } from '@heroicons/vue/24/outline'
 
 const auth   = useAuthStore()
@@ -250,6 +255,7 @@ const pageTitles = {
   loans:                  'Business Loans',
   rentals:                'Monthly Rentals',
   'customer-investments': 'Owner Investments',
+  'getting-started':      'Getting Started',
 }
 
 const pageTitle  = computed(() => pageTitles[route.name] ?? 'Siril Motors')

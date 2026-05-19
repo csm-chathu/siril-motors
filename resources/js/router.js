@@ -36,7 +36,8 @@ const routes = [
             { path: 'day-end',       name: 'day-end',       component: () => import('@/pages/DayEnd.vue') },
             { path: 'audit-log',     name: 'audit-log',     component: () => import('@/pages/AuditLog.vue') },
             { path: 'users',         name: 'users',         component: () => import('@/pages/Users.vue') },
-            { path: 'shop-settings', name: 'shop-settings', component: () => import('@/pages/ShopSettings.vue') },
+            { path: 'shop-settings',   name: 'shop-settings',   component: () => import('@/pages/ShopSettings.vue') },
+            { path: 'getting-started', name: 'getting-started', component: () => import('@/pages/GettingStarted.vue') },
             // Accounting
             { path: 'opening-balances',  name: 'opening-balances',  component: () => import('@/pages/OpeningBalances.vue') },
             { path: 'accounts',          name: 'accounts',          component: () => import('@/pages/ChartOfAccounts.vue') },
