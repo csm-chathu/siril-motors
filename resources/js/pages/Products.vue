@@ -83,9 +83,21 @@
               </td>
               <td class="table-td">
                 <div class="flex items-center gap-2">
-                  <button @click="reprintBarcode(p)" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 whitespace-nowrap">
-                    <PrinterIcon class="w-3.5 h-3.5" /> Print Barcode
-                  </button>
+                  <div class="inline-flex items-center rounded-md overflow-hidden border border-emerald-200">
+                    <input type="number" min="1" max="100"
+                      :value="printQty[p.id] ?? 1"
+                      @change="printQty[p.id] = Math.max(1, Math.min(100, Number($event.target.value)))"
+                      class="w-10 text-center text-xs py-1 border-none outline-none bg-white text-gray-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                    <button @click="reprintBarcode(p)" :disabled="printingId === p.id"
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 whitespace-nowrap disabled:opacity-60">
+                      <svg v-if="printingId === p.id" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                      </svg>
+                      <PrinterIcon v-else class="w-3.5 h-3.5" />
+                      {{ printingId === p.id ? 'Printing…' : 'Print' }}
+                    </button>
+                  </div>
                   <button @click="openEdit(p)" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200">
                     <PencilSquareIcon class="w-3.5 h-3.5" /> Edit
                   </button>
@@ -148,6 +160,8 @@ const vehicleTypeFilter  = ref('')
 const lowStockOnly     = ref(false)
 const page             = ref(1)
 const showModal        = ref(false)
+const printingId       = ref(null)
+const printQty         = ref({})
 const editing          = ref(null)
 
 let debounceTimer = null
@@ -203,12 +217,23 @@ function createBarcodeSvg(value) {
   return svg.outerHTML
 }
 
-function printProductBarcode(product) {
+function printProductBarcode(product, qty = 1) {
   if (!product?.sku) return
   const barcodeValue = product.barcode?.trim() || product.sku
   const barcodeSvg   = createBarcodeSvg(barcodeValue)
   const safeName     = (product.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const safeBarcode  = barcodeValue.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const safeBrand    = (product.brand?.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const safeModel    = (product.model?.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const brandModel   = [safeBrand, safeModel].filter(Boolean).join(' · ')
+
+  const labelHtml = `
+  <div class="label">
+    <div class="name">${safeName}</div>
+    ${brandModel ? `<div class="brand-model">${brandModel}</div>` : ''}
+    ${barcodeSvg}
+    <div class="sku">${safeBarcode}</div>
+  </div>`
 
   const html = `<!doctype html>
 <html>
@@ -217,24 +242,28 @@ function printProductBarcode(product) {
   <style>
     @media print { @page { size: 1.181in 0.787in; margin: 0; } }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 30mm; height: 20mm; margin: 0; padding: 0; background: #fff;
+    html, body { width: 30mm; background: #fff;
       font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .label { width: 30mm; height: 20mm; padding: 0.8mm 1.5mm 0.5mm;
-      display: flex; flex-direction: column; align-items: center; justify-content: space-between; overflow: hidden; }
+    .label { width: 30mm; height: 20mm; padding: 2mm 1.5mm 0.5mm;
+      display: flex; flex-direction: column; align-items: center; justify-content: space-between; overflow: hidden;
+      page-break-after: always; }
     .name { font-size: 6.5pt; font-weight: 700; white-space: nowrap; overflow: hidden;
       text-overflow: ellipsis; width: 100%; text-align: center; line-height: 1; flex-shrink: 0; }
-    svg { width: 100%; height: 9.5mm; display: block; flex-shrink: 0; }
-    .sku { font-size: 8pt; font-weight: 700; letter-spacing: 1px; text-align: center; margin-top: 0.4mm; line-height: 1; }
+    .brand-model { font-size: 5.5pt; color: #555; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; width: 100%; text-align: center; line-height: 1.2; flex-shrink: 0; }
+    svg { width: 80%; height: 7mm; display: block; flex-shrink: 0; margin: 0 auto; }
+    .sku { font-size: 7pt; font-weight: 700; letter-spacing: 1px; text-align: center; margin-top: 0.3mm; line-height: 1; }
   </style>
 </head>
 <body>
-  <div class="label">
-    <div class="name">${safeName}</div>
-    ${barcodeSvg}
-    <div class="sku">${safeBarcode}</div>
-  </div>
+  ${Array(qty).fill(labelHtml).join('')}
 </body>
 </html>`
+
+  if (window.electronAPI?.printBarcode) {
+    window.electronAPI.printBarcode(html)
+    return
+  }
 
   const iframe = document.createElement('iframe')
   iframe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;border:none;'
@@ -249,7 +278,9 @@ function printProductBarcode(product) {
 }
 
 function reprintBarcode(product) {
-  printProductBarcode(product)
+  printingId.value = product.id
+  setTimeout(() => { printingId.value = null }, 3000)
+  printProductBarcode(product, printQty.value[product.id] ?? 1)
 }
 
 async function deleteProduct(p) {

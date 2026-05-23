@@ -128,7 +128,7 @@
 
       <!-- Print button -->
       <div class="text-center mt-6">
-        <button @click="window.print()"
+        <button @click="printReceipt()"
           class="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium text-sm shadow-sm transition-colors">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" />
@@ -154,6 +154,14 @@ const loading = ref(true)
 
 function lkr(val) {
   return Number(val || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+async function printReceipt() {
+  if (window.electronAPI?.printReceipt) {
+    await window.electronAPI.printReceipt('pos')
+    return
+  }
+  window.print()
 }
 
 const statusLabel = computed(() => {

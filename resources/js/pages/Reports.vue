@@ -803,7 +803,11 @@ function exportCsv(tab) {
   URL.revokeObjectURL(url)
 }
 
-function printReport() {
+async function printReport() {
+  if (window.electronAPI?.printReceipt) {
+    await window.electronAPI.printReceipt('pos')
+    return
+  }
   window.print()
 }
 

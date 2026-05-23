@@ -1,5 +1,5 @@
 ﻿<template>
-  <div :data-print-mode="printMode">
+  <div>
 
     <!-- ── Screen toolbar (no-print) ── -->
     <div class="no-print flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -43,28 +43,8 @@
           <CheckCircleIcon class="w-4 h-4" /> Settle &amp; Deliver
         </button>
 
-        <!-- Print mode toggle -->
-        <div class="flex border border-gray-200 rounded-lg overflow-hidden text-sm">
-          <button @click="printMode = 'pos'"
-            :class="printMode === 'pos' ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-            class="px-3 py-1.5 flex items-center gap-1.5 font-medium transition-colors">
-            <PrinterIcon class="w-4 h-4" /> POS
-          </button>
-          <button @click="printMode = 'a5'"
-            :class="printMode === 'a5' ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-            class="px-3 py-1.5 flex items-center gap-1.5 font-medium transition-colors border-l border-gray-200">
-            <DocumentTextIcon class="w-4 h-4" /> A5
-          </button>
-        </div>
 
-        <!-- Direct Print (QZ Tray, POS only) -->
-        <button v-if="printMode === 'pos'" @click="directPrint"
-          :disabled="directPrinting || loading || !sale"
-          class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-lg font-medium text-sm shadow-sm transition-colors">
-          <ArrowPathIcon v-if="directPrinting" class="w-4 h-4 animate-spin" />
-          <PrinterIcon v-else class="w-4 h-4" />
-          {{ directPrinting ? 'Printing...' : 'Direct Print' }}
-        </button>
+    
 
         <!-- Send SMS -->
         <button v-if="sale" @click="openSmsModal"
@@ -79,7 +59,7 @@
         <button @click="printReceipt" :disabled="loading || !sale"
           class="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white rounded-lg font-medium text-sm shadow-sm transition-colors">
           <PrinterIcon class="w-4 h-4" />
-          {{ printMode === 'a5' ? 'Print A5 Invoice' : 'Print Receipt' }}
+          Print Receipt
         </button>
       </div>
     </div>
@@ -107,20 +87,21 @@
       <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
            POS / 80mm Thermal Receipt (POS-80)
       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-      <div v-show="printMode === 'pos'" id="receipt-wrapper">
+      <div id="receipt-wrapper">
         <div id="receipt" class="receipt-paper">
 
           <!-- HEADER -->
           <div style="text-align:center; margin-bottom:6px;">
             <img v-if="shop.logo_url" :src="shop.logo_url" alt="logo"
               style="max-height:40px; max-width:160px; object-fit:contain; display:block; margin:0 auto 4px;" />
-            <div style="font-size:15px; font-weight:bold; letter-spacing:1px; text-transform:uppercase;">
+            <div style="font-size:17px; font-weight:bold; letter-spacing:1px; text-transform:uppercase;">
               {{ shop.shop_name || appName }}
             </div>
-            <div v-if="shop.address" style="font-size:9px; color:#555; white-space:pre-line; margin-top:2px;">{{ shop.address }}</div>
-            <div v-if="shop.phone"   style="font-size:9px; color:#555;">Tel: {{ shop.phone }}</div>
-            <div v-if="shop.br_number" style="font-size:9px; color:#555;">BR: {{ shop.br_number }}</div>
-            <div style="font-size:10px; margin-top:3px;">Sales Receipt</div>
+            <div v-if="shop.address || shop.phone" style="font-size:12px; color:#555; margin-top:2px;">
+              <span v-if="shop.address">{{ shop.address }}</span><span v-if="shop.address && shop.phone"> | </span><span v-if="shop.phone">{{ shop.phone }}</span>
+            </div>
+            <div v-if="shop.br_number" style="font-size:12px; color:#555;">BR: {{ shop.br_number }}</div>
+            <div style="font-size:12px; margin-top:3px;">Sales Receipt</div>
           </div>
 
           <hr class="receipt-divider-double" />
@@ -139,9 +120,6 @@
             </div>
             <div v-if="sale.sale_type === 'booking' && sale.booking_expires_at" class="flex-row" style="color:#b91c1c; font-weight:bold;">
               <span>Expires :</span><span style="float:right;">{{ fmtDate(sale.booking_expires_at) }}</span>
-            </div>
-            <div v-if="sale.delivery_status === 'delivered' && sale.delivered_at" class="flex-row" style="color:#166534; font-weight:bold;">
-              <span>Delivered:</span><span style="float:right;">{{ fmtDate(sale.delivered_at) }}</span>
             </div>
           </div>
 
@@ -172,7 +150,7 @@
                 <span style="width:58px; text-align:right; font-weight:bold;">{{ lkr(item.total) }}</span>
               </div>
               <div style="color:#555; font-size:9px; padding-left:2px; line-height:1.3;">
-                <span v-if="item.product?.sku">SKU:{{ item.product.sku }}</span>
+                <span v-if="item.product?.sku">{{ item.product.sku }}</span>
               </div>
               <div v-if="Number(item.discount) > 0" style="font-size:9px; color:#555; padding-left:2px;">
                 Item Disc: -{{ lkr(item.discount) }}
@@ -226,140 +204,20 @@
 
           <hr class="receipt-divider" />
 
-          <!-- BARCODE -->
-          <div style="text-align:center; margin:6px 0 2px;">
-            <canvas ref="barcodeCanvas" style="max-width:100%; height:40px;"></canvas>
-            <div style="font-size:9px; letter-spacing:2px; margin-top:2px;">{{ sale.invoice_number }}</div>
-          </div>
-
-          <hr class="receipt-divider" />
-
           <!-- FOOTER -->
           <div style="text-align:center; font-size:10px; line-height:1.6;">
             <div style="font-weight:bold;">*** Thank You! Come Again ***</div>
-            <div style="font-size:9px; color:#555;">{{ fmtDate(sale.sold_at) }}</div>
+          </div>
+
+          <!-- QR CODE -->
+          <div style="display:flex; flex-direction:column; align-items:center; margin:6px 0 2px;">
+            <img v-if="qrDataUrl" :src="qrDataUrl" style="width:64px; height:64px;" />
+            <div style="font-size:10px; font-weight:bold; letter-spacing:0.5px; margin-top:4px;">lumac.lk | 076 464 3050</div>
           </div>
 
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-           A5 Invoice
-      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-      <div v-show="printMode === 'a5'" id="invoice-wrapper">
-        <div id="invoice" class="a5-paper">
-
-          <!-- SHOP HEADER -->
-          <div class="inv-header">
-            <div class="inv-logo-block">
-              <img v-if="shop.logo_url" :src="shop.logo_url" alt="logo" class="inv-logo" />
-              <div>
-                <div class="inv-shop-name">{{ shop.shop_name || appName }}</div>
-                <div v-if="shop.address" class="inv-shop-sub" style="white-space:pre-line;">{{ shop.address }}</div>
-                <div v-if="shop.phone"     class="inv-shop-sub">Tel: {{ shop.phone }}</div>
-                <div v-if="shop.br_number" class="inv-shop-sub">BR No: {{ shop.br_number }}</div>
-              </div>
-            </div>
-            <div class="inv-meta-block">
-              <div v-if="sale.sale_type === 'booking'" style="text-align:right; margin-bottom:6px;">
-                <span style="background:#7c3aed; color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px; letter-spacing:1px; text-transform:uppercase;">Booking Advance</span>
-              </div>
-              <table class="inv-meta-table">
-                <tr><td>Invoice No</td><td><strong>{{ sale.invoice_number }}</strong></td></tr>
-                <tr><td>Date &amp; Time</td><td>{{ fmtDate(sale.sold_at) }}, {{ formatTime(sale.sold_at) }}</td></tr>
-                <tr><td>Cashier</td><td>{{ sale.user?.name ?? '&mdash;' }}</td></tr>
-                <tr v-if="sale.sale_type === 'booking' && sale.booking_expires_at">
-                  <td style="color:#b91c1c;">Expires</td>
-                  <td style="color:#b91c1c; font-weight:700;">{{ fmtDate(sale.booking_expires_at) }}</td>
-                </tr>
-                <tr v-if="sale.delivery_status === 'delivered' && sale.delivered_at">
-                  <td style="color:#166534;">Delivered</td>
-                  <td style="color:#166534; font-weight:700;">{{ fmtDate(sale.delivered_at) }}</td>
-                </tr>
-              </table>
-            </div>
-          </div>
-
-          <!-- CUSTOMER -->
-          <div class="inv-customer">
-            <strong>Bill To:</strong>
-            {{ sale.customer?.name ?? 'Walk-in Customer' }}
-            <span v-if="sale.customer?.phone"> &nbsp;|&nbsp; Tel: {{ sale.customer.phone }}</span>
-            <span v-if="sale.customer?.vehicle_number"> &nbsp;|&nbsp; Vehicle: <strong>{{ sale.customer.vehicle_number }}</strong></span>
-            <span style="text-transform:capitalize;"> &nbsp;|&nbsp; Payment: {{ sale.payment_method?.replace('_', ' ') }}</span>
-            <span> &nbsp;|&nbsp; Status: <strong style="text-transform:uppercase;">{{ sale.payment_status }}</strong></span>
-          </div>
-
-          <!-- ITEMS TABLE -->
-          <table class="inv-items-table">
-            <thead>
-              <tr>
-                <th style="text-align:left;">Item / Description</th>
-                <th style="text-align:center; width:40px;">Qty</th>
-                <th style="text-align:right; width:90px;">Unit Price</th>
-                <th style="text-align:right; width:70px;">Disc.</th>
-                <th style="text-align:right; width:100px;">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in sale.items" :key="item.id">
-                <td>
-                  <div style="font-weight:600;">{{ item.product?.name ?? 'Unknown' }}</div>
-                  <div style="font-size:10px; color:#666;">
-                    <span v-if="item.product?.sku">SKU: {{ item.product.sku }}</span>
-                  </div>
-                </td>
-                <td style="text-align:center;">{{ item.quantity }}</td>
-                <td style="text-align:right;">LKR {{ lkr(item.unit_price) }}</td>
-                <td style="text-align:right;">{{ Number(item.discount) > 0 ? 'LKR ' + lkr(item.discount) : 'â€"' }}</td>
-                <td style="text-align:right; font-weight:700;">LKR {{ lkr(item.total) }}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <!-- TOTALS + PAYMENT SUMMARY -->
-          <div class="inv-totals-row">
-            <div class="inv-notes">
-              <div v-if="sale.notes" style="font-size:11px; color:#555;">
-                <strong>Notes:</strong> {{ sale.notes }}
-              </div>
-            </div>
-            <div class="inv-totals">
-              <div v-if="Number(sale.subtotal) !== Number(sale.total)" class="inv-total-line">
-                <span>Subtotal</span><span>LKR {{ lkr(sale.subtotal) }}</span>
-              </div>
-              <div v-if="Number(sale.discount) > 0" class="inv-total-line">
-                <span>Discount</span><span>- LKR {{ lkr(sale.discount) }}</span>
-              </div>
-              <div v-if="Number(sale.tax) > 0" class="inv-total-line">
-                <span>Tax ({{ sale.tax_rate }}%)</span><span>+ LKR {{ lkr(sale.tax) }}</span>
-              </div>
-              <div v-if="Number(sale.maintenance_amount) > 0" class="inv-total-line">
-                <span>Maintenance</span><span>+ LKR {{ lkr(sale.maintenance_amount) }}</span>
-              </div>
-              <div class="inv-total-line inv-grand-total">
-                <span>TOTAL</span><span>LKR {{ lkr(sale.total) }}</span>
-              </div>
-              <div class="inv-total-line">
-                <span>Amount Paid</span><span>LKR {{ lkr(sale.amount_paid) }}</span>
-              </div>
-              <div v-if="Number(sale.amount_paid) > Number(sale.total)" class="inv-total-line" style="color:#16a34a; font-weight:700;">
-                <span>Change</span><span>LKR {{ lkr(Number(sale.amount_paid) - Number(sale.total)) }}</span>
-              </div>
-              <div v-if="Number(sale.amount_paid) < Number(sale.total)" class="inv-total-line" style="color:#dc2626; font-weight:700;">
-                <span>Balance Due</span><span>LKR {{ lkr(Number(sale.total) - Number(sale.amount_paid)) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- FOOTER -->
-          <div class="inv-footer">
-            <div style="font-weight:600;">Thank you for your purchase!</div>
-            <div v-if="shop.shop_name" style="font-size:10px; color:#888; margin-top:2px;">{{ shop.shop_name }}</div>
-          </div>
-
-        </div>
-      </div>
 
     </template>
 
@@ -466,13 +324,16 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
-import { ArrowLeftIcon, PrinterIcon, ArrowPathIcon, DocumentTextIcon, CheckCircleIcon, PencilSquareIcon } from '@heroicons/vue/24/outline'
+import QRCode from 'qrcode'
+import { ArrowLeftIcon, PrinterIcon, ArrowPathIcon, CheckCircleIcon, PencilSquareIcon } from '@heroicons/vue/24/outline'
 import { fmtDate } from '../utils/date.js'
+
+const WHATSAPP_URL = 'https://wa.me/94764643050'
 
 const route           = useRoute()
 const sale            = ref(null)
 const loading         = ref(true)
-const barcodeCanvas   = ref(null)
+const qrDataUrl       = ref('')
 const appName         = import.meta.env.VITE_APP_NAME ?? 'Siril Motors'
 const preferredPrinter = import.meta.env.VITE_THERMAL_PRINTER ?? ''
 const directPrinting  = ref(false)
@@ -487,7 +348,7 @@ async function finalizeDraft() {
     const { data } = await axios.post(`/api/sales/${sale.value.id}/finalize`)
     sale.value = data
     await nextTick()
-    drawAllBarcodes()
+    await generateQr()
   } catch (e) {
     alert(e.response?.data?.message ?? 'Could not finalize draft.')
   } finally {
@@ -562,7 +423,7 @@ async function submitSettle() {
     sale.value = data
     settleModal.value = false
     await nextTick()
-    drawAllBarcodes()
+    await generateQr()
   } catch (e) {
     settleError.value = e.response?.data?.message
       ?? Object.values(e.response?.data?.errors ?? {}).flat().join(', ')
@@ -572,8 +433,7 @@ async function submitSettle() {
   }
 }
 
-const shop = ref({ shop_name: '', address: '', phone: '', br_number: '', logo_url: '', print_mode: 'a5' })
-const printMode = ref('a5')
+const shop = ref({ shop_name: '', address: '', phone: '', br_number: '', logo_url: '' })
 
 function lkr(val) {
   return Number(val || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -582,52 +442,20 @@ function formatTime(d) {
   return new Date(d).toLocaleTimeString('en-LK', { hour: '2-digit', minute: '2-digit' })
 }
 
-function drawBarcode(canvas, text) {
-  if (!canvas || !text) return
-  const W = 255, H = 40
-  canvas.width = W; canvas.height = H
-  const ctx = canvas.getContext('2d')
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H)
-  const narrow = 2, wide = 5, gap = 2
-  let x = 4; ctx.fillStyle = '#000'
-  const C39 = {
-    '0':'000110100','1':'100100001','2':'001100001','3':'101100000',
-    '4':'000110001','5':'100110000','6':'001110000','7':'000100101',
-    '8':'100100100','9':'001100100','A':'100001001','B':'001001001',
-    'C':'101001000','D':'000011001','E':'100011000','F':'001011000',
-    'G':'000001101','H':'100001100','I':'001001100','J':'000011100',
-    'K':'100000011','L':'001000011','M':'101000010','N':'000010011',
-    'O':'100010010','P':'001010010','Q':'000000111','R':'100000110',
-    'S':'001000110','T':'000010110','U':'110000001','V':'011000001',
-    'W':'111000000','X':'010010001','Y':'110010000','Z':'011010000',
-    '-':'010000101','.':'110000100',' ':'011000100','*':'010010100',
-    '$':'010101000','/':'010100010','+':'010001010','%':'101010000',
-  }
-  for (const ch of ('*' + text + '*').toUpperCase().split('')) {
-    const pattern = C39[ch]; if (!pattern) continue
-    for (let i = 0; i < 9; i++) {
-      const w = pattern[i] === '1' ? wide : narrow
-      if (i % 2 === 0) { ctx.fillStyle = '#000'; ctx.fillRect(x, 0, w, H) }
-      x += w
-    }
-    x += gap
-  }
+async function generateQr() {
+  qrDataUrl.value = await QRCode.toDataURL(WHATSAPP_URL, { width: 128, margin: 1 })
 }
 
-function drawAllBarcodes() {
-  if (sale.value) {
-    drawBarcode(barcodeCanvas.value, sale.value.invoice_number)
-  }
-}
-
-function printReceipt() {
+async function printReceipt() {
   document.querySelector('#dyn-page-style')?.remove()
   const s = document.createElement('style')
   s.id = 'dyn-page-style'
-  s.textContent = printMode.value === 'a5'
-    ? `@media print { @page { size: A5; margin: 12mm 15mm; } }`
-    : `@media print { @page { size: 80mm auto; margin: 0; } }`
+  s.textContent = `@media print { @page { size: 80mm auto; margin: 0; } }`
   document.head.appendChild(s)
+  if (window.electronAPI?.printReceipt) {
+    await window.electronAPI.printReceipt('pos')
+    return
+  }
   window.print()
 }
 
@@ -707,8 +535,6 @@ async function directPrint() {
   }
 }
 
-watch(barcodeCanvas, () => drawAllBarcodes())
-
 onMounted(async () => {
   try {
     const [saleRes, settingsRes] = await Promise.all([
@@ -718,9 +544,7 @@ onMounted(async () => {
     sale.value = saleRes.data
     const s = settingsRes.data
     Object.keys(shop.value).forEach(k => { if (s[k] != null) shop.value[k] = s[k] })
-    if (shop.value.print_mode) printMode.value = shop.value.print_mode
-    await nextTick()
-    drawAllBarcodes()
+    await generateQr()
   } catch {
     sale.value = null
   } finally {
@@ -733,76 +557,27 @@ onMounted(async () => {
 /* â"€â"€ Screen: POS preview â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 .receipt-paper {
   width: 287px;
-  padding: 16px 14px;
+  padding: 16px 18px 16px 14px;
   margin: 0 auto 32px;
   background: #fff;
   box-shadow: 0 0 0 1px #e5e7eb, 0 4px 24px rgba(0,0,0,0.08);
   border-radius: 4px;
   font-family: 'Courier New', Courier, monospace;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5;
   color: #111;
 }
 .receipt-divider        { border: none; border-top: 1px dashed #aaa; margin: 6px 0; }
 .receipt-divider-solid  { border: none; border-top: 1px solid #555; margin: 6px 0; }
 .receipt-divider-double { border: none; border-top: 3px double #333; margin: 6px 0; }
 
-/* â"€â"€ Screen: A5 invoice preview â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
-.a5-paper {
-  width: 148mm;
-  min-height: 200mm;
-  margin: 0 auto 32px;
-  padding: 12mm 14mm;
-  background: #fff;
-  box-shadow: 0 0 0 1px #e5e7eb, 0 4px 32px rgba(0,0,0,0.10);
-  border-radius: 4px;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 11px;
-  color: #111;
-  box-sizing: border-box;
-}
-.inv-header       { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; padding-bottom:10px; border-bottom:2px solid #1a1a1a; }
-.inv-logo-block   { display:flex; align-items:flex-start; gap:10px; }
-.inv-logo         { max-height:52px; max-width:80px; object-fit:contain; }
-.inv-shop-name    { font-size:15px; font-weight:800; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:2px; }
-.inv-shop-sub     { font-size:10px; color:#555; line-height:1.5; }
-.inv-meta-block   { text-align:right; min-width:140px; }
-.inv-title        { font-size:22px; font-weight:900; letter-spacing:3px; color:#1a1a1a; margin-bottom:6px; }
-.inv-meta-table   { font-size:10px; border-collapse:collapse; margin-left:auto; }
-.inv-meta-table td { padding:1px 4px; }
-.inv-meta-table td:first-child { color:#888; text-align:right; }
-.inv-meta-table td:last-child  { font-size:11px; text-align:left; }
-.inv-customer     { font-size:11px; background:#f9f9f9; border:1px solid #e5e7eb; padding:6px 10px; border-radius:4px; margin-bottom:10px; }
-.inv-items-table  { width:100%; border-collapse:collapse; font-size:11px; margin-bottom:10px; }
-.inv-items-table thead tr { background:#1a1a1a; color:#fff; }
-.inv-items-table th { padding:5px 6px; font-size:10px; font-weight:700; letter-spacing:0.3px; }
-.inv-items-table tbody tr { border-bottom:1px solid #e5e7eb; }
-.inv-items-table tbody tr:nth-child(even) { background:#fafafa; }
-.inv-items-table td { padding:5px 6px; vertical-align:top; }
-.inv-totals-row   { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-top:8px; }
-.inv-notes        { flex:1; font-size:10px; color:#555; padding-top:4px; }
-.inv-totals       { min-width:220px; }
-.inv-total-line   { display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:1px dashed #e5e7eb; }
-.inv-grand-total  { font-size:14px; font-weight:800; border-top:2px solid #1a1a1a; border-bottom:2px solid #1a1a1a; padding:4px 0; margin:2px 0; }
-.inv-footer       { text-align:center; margin-top:16px; padding-top:10px; border-top:1px dashed #ccc; font-size:11px; }
-
-/* â"€â"€ @media print â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 @media print {
   .no-print, aside, nav, header, footer { display: none !important; }
   html, body { margin:0 !important; padding:0 !important; height:auto !important; overflow:visible !important; background:#fff !important; }
   #app, #app > div, #app main { width:auto !important; min-width:0 !important; height:auto !important; min-height:0 !important; overflow:visible !important; padding:0 !important; margin:0 !important; background:#fff !important; }
-
-  /* POS mode */
-  [data-print-mode="pos"] #invoice-wrapper { display: none !important; }
-  [data-print-mode="pos"] #receipt-wrapper { display:block !important; position:static !important; width:80mm !important; padding:0 !important; margin:0 !important; overflow:visible !important; }
-  [data-print-mode="pos"] .receipt-paper { width:80mm !important; max-width:80mm !important; margin:0 !important; padding:3mm 4mm !important; box-shadow:none !important; border-radius:0 !important; font-size:11pt !important; font-family:'Courier New',Courier,monospace !important; color:#000 !important; background:#fff !important; }
-  [data-print-mode="pos"] #receipt-wrapper, [data-print-mode="pos"] #receipt-wrapper * { color:#000 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; background:transparent !important; }
-
-  /* A5 mode */
-  [data-print-mode="a5"] #receipt-wrapper { display: none !important; }
-  [data-print-mode="a5"] #invoice-wrapper { display: block !important; }
-  [data-print-mode="a5"] .a5-paper { width:100% !important; min-height:0 !important; margin:0 !important; padding:0 !important; box-shadow:none !important; border-radius:0 !important; font-family:Arial,Helvetica,sans-serif !important; font-size:11pt !important; color:#000 !important; background:#fff !important; }
-  [data-print-mode="a5"] .a5-paper * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  [data-print-mode="a5"] .inv-items-table thead tr { background:#1a1a1a !important; color:#fff !important; }
+  #receipt-wrapper { display:block !important; position:static !important; width:80mm !important; padding:0 !important; margin:0 !important; overflow:visible !important; }
+  .receipt-paper { width:80mm !important; max-width:80mm !important; margin:0 !important; padding:3mm 5mm 3mm 4mm !important; box-shadow:none !important; border-radius:0 !important; font-size:15pt !important; font-weight:600 !important; font-family:'Courier New',Courier,monospace !important; color:#000 !important; background:#fff !important; }
+  #receipt-wrapper, #receipt-wrapper * { color:#000 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; background:transparent !important; }
 }
 </style>
