@@ -56,10 +56,14 @@
         </button>
 
         <!-- Standard Print -->
-        <button @click="printReceipt" :disabled="loading || !sale"
+        <button @click="printReceipt" :disabled="loading || !sale || printing"
           class="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white rounded-lg font-medium text-sm shadow-sm transition-colors">
-          <PrinterIcon class="w-4 h-4" />
-          Print Receipt
+          <svg v-if="printing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+          </svg>
+          <PrinterIcon v-else class="w-4 h-4" />
+          {{ printing ? 'Printing…' : 'Print Receipt' }}
         </button>
       </div>
     </div>
@@ -333,6 +337,7 @@ const WHATSAPP_URL = 'https://wa.me/94764643050'
 const route           = useRoute()
 const sale            = ref(null)
 const loading         = ref(true)
+const printing        = ref(false)
 const qrDataUrl       = ref('')
 const appName         = import.meta.env.VITE_APP_NAME ?? 'Siril Motors'
 const preferredPrinter = import.meta.env.VITE_THERMAL_PRINTER ?? ''
@@ -447,6 +452,8 @@ async function generateQr() {
 }
 
 async function printReceipt() {
+  printing.value = true
+  setTimeout(() => { printing.value = false }, 3000)
   document.querySelector('#dyn-page-style')?.remove()
   const s = document.createElement('style')
   s.id = 'dyn-page-style'
