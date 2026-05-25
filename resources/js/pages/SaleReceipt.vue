@@ -584,7 +584,7 @@ onMounted(async () => {
   html, body { margin:0 !important; padding:0 !important; height:auto !important; overflow:visible !important; background:#fff !important; }
   #app, #app > div, #app main { width:auto !important; min-width:0 !important; height:auto !important; min-height:0 !important; overflow:visible !important; padding:0 !important; margin:0 !important; background:#fff !important; }
   #receipt-wrapper { display:block !important; position:static !important; width:80mm !important; padding:0 !important; margin:0 !important; overflow:visible !important; }
-  .receipt-paper { width:80mm !important; max-width:80mm !important; margin:0 !important; padding:3mm 5mm 3mm 4mm !important; box-shadow:none !important; border-radius:0 !important; font-size:15pt !important; font-weight:600 !important; font-family:'Courier New',Courier,monospace !important; color:#000 !important; background:#fff !important; }
+  .receipt-paper { width:80mm !important; max-width:80mm !important; margin:0 !important; padding:3mm 8mm 3mm 4mm !important; box-shadow:none !important; border-radius:0 !important; font-size:16pt !important; font-weight:600 !important; font-family:'Courier New',Courier,monospace !important; color:#000 !important; background:#fff !important; }
   #receipt-wrapper, #receipt-wrapper * { color:#000 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; background:transparent !important; }
 }
 </style>

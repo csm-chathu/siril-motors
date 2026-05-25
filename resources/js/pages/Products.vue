@@ -240,7 +240,7 @@ function printProductBarcode(product, qty = 1) {
 <head>
   <meta charset="utf-8">
   <style>
-    @media print { @page { size: 1.181in 0.787in; margin: 0; } }
+    @media print { @page { size: 1.181in 0.787in landscape; margin: 0; } }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 30mm; background: #fff;
       font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
