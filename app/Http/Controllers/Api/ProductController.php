@@ -40,6 +40,7 @@ class ProductController extends Controller
     {
         $data = $request->validate([
             'name'             => 'required|string|max:200',
+            'part_number'      => 'nullable|string|max:100',
             'description'      => 'nullable|string',
             'part_category_id' => 'nullable|exists:part_categories,id',
             'quality_type_id'  => 'nullable|exists:quality_types,id',
@@ -84,6 +85,7 @@ class ProductController extends Controller
     {
         $data = $request->validate([
             'name'             => 'required|string|max:200',
+            'part_number'      => 'nullable|string|max:100',
             'description'      => 'nullable|string',
             'part_category_id' => 'nullable|exists:part_categories,id',
             'quality_type_id'  => 'nullable|exists:quality_types,id',

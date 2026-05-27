@@ -10,9 +10,15 @@
         <div class="grid grid-cols-2 gap-4">
 
           <!-- Name -->
-          <div class="col-span-2">
+          <div>
             <label class="form-label">Part Name *</label>
             <input v-model="form.name" required class="form-input" placeholder="e.g. Water Pump" />
+          </div>
+
+          <!-- Part Number -->
+          <div>
+            <label class="form-label">Part Number</label>
+            <input v-model="form.part_number" class="form-input font-mono" placeholder="e.g. WP-1234" />
           </div>
 
           <!-- Barcode -->
@@ -170,7 +176,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 
 const form = reactive({
-  name: '', description: '', barcode: '',
+  name: '', part_number: '', description: '', barcode: '',
   part_category_id: '', quality_type_id: '',
   vehicle_type_id: '', brand_id: '', model_id: '',
   supplier_id: '', rack_location: '',
