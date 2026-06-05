@@ -63,6 +63,7 @@ class PurchaseController extends Controller
             'cheque_number'    => 'nullable|required_if:payment_method,cheque|string|max:50',
             'cheque_date'      => 'nullable|required_if:payment_method,cheque|date',
             'cheque_bank_name' => 'nullable|required_if:payment_method,cheque|string|max:100',
+            'credit_due_date'  => 'nullable|required_if:payment_method,credit|date',
             'notes'            => 'nullable|string',
         ]);
 
@@ -84,6 +85,7 @@ class PurchaseController extends Controller
                 'cheque_number'     => $data['cheque_number'] ?? null,
                 'cheque_date'       => $data['cheque_date'] ?? null,
                 'cheque_bank_name'  => $data['cheque_bank_name'] ?? null,
+                'credit_due_date'   => $data['credit_due_date'] ?? null,
                 'notes'             => $data['notes'] ?? null,
                 'supplier_ref'      => $data['supplier_ref'] ?? null,
                 'expected_delivery' => $data['expected_delivery'] ?? null,
@@ -172,7 +174,15 @@ class PurchaseController extends Controller
     public function show(Purchase $purchase)
     {
         $this->authorizeBranch($purchase->branch_id);
-        return response()->json($purchase->load(['items.product', 'supplier', 'user']));
+        return response()->json($purchase->load([
+            'items.product.partCategory:id,name',
+            'items.product.vehicleType:id,name',
+            'items.product.brand:id,name',
+            'items.product.model:id,name',
+            'supplier',
+            'user:id,name',
+            'journalEntry:id,entry_number',
+        ]));
     }
 
     public function receive(Request $request, Purchase $purchase)
@@ -307,7 +317,9 @@ class PurchaseController extends Controller
 
         // Cr Cash / Bank / Cheques Payable / Accounts Payable
         $creditAccountId = ($purchase->payment_method === 'credit') ? $ap->id : $paymentAccount->id;
-        $creditDesc      = ($purchase->payment_method === 'credit') ? 'Supplier payable recorded' : 'Purchase paid';
+        $creditDesc      = ($purchase->payment_method === 'credit')
+            ? 'Supplier payable recorded' . ($purchase->credit_due_date ? ' — due ' . $purchase->credit_due_date->format('d M Y') : '')
+            : 'Purchase paid';
 
         JournalEntryLine::create([
             'journal_entry_id' => $entry->id,
@@ -380,6 +392,77 @@ class PurchaseController extends Controller
             ]);
 
             AuditLog::record('cheque_settled', "Cheque settled for {$purchase->purchase_number}", $purchase);
+
+            DB::commit();
+            return response()->json($purchase->fresh());
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function settleCreditPurchase(Request $request, Purchase $purchase)
+    {
+        $this->authorizeBranch($purchase->branch_id);
+
+        if ($purchase->payment_method !== 'credit') {
+            return response()->json(['message' => 'This purchase is not a credit payment.'], 422);
+        }
+        if ($purchase->credit_settled_at) {
+            return response()->json(['message' => 'Credit already settled.'], 422);
+        }
+
+        $data = $request->validate([
+            'payment_method' => 'required|in:cash,bank_transfer,cheque',
+            'settled_date'   => 'nullable|date',
+            'notes'          => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $ap      = Account::where('code', '2000')->first();
+            $payAcct = $this->paymentAccountByMethod($data['payment_method']);
+
+            if (!$ap)      throw new \Exception('Accounts Payable account (2000) not found.');
+            if (!$payAcct) throw new \Exception('Payment account not found for selected payment method.');
+
+            $settledAt = $data['settled_date'] ?? now();
+
+            $entry = JournalEntry::create([
+                'entry_number'   => $this->nextEntryNumber(),
+                'entry_date'     => $settledAt,
+                'description'    => "Credit settled – {$purchase->purchase_number} (supplier: {$purchase->supplier?->name})",
+                'reference_type' => 'Purchase',
+                'reference_id'   => $purchase->id,
+                'branch_id'      => $purchase->branch_id,
+                'created_by'     => auth()->id(),
+                'status'         => 'posted',
+            ]);
+
+            // Dr Accounts Payable — clears the liability
+            JournalEntryLine::create([
+                'journal_entry_id' => $entry->id,
+                'account_id'       => $ap->id,
+                'debit'            => $purchase->total,
+                'credit'           => 0,
+                'description'      => "Credit payable cleared – {$purchase->purchase_number}",
+            ]);
+
+            // Cr Cash / Bank
+            JournalEntryLine::create([
+                'journal_entry_id' => $entry->id,
+                'account_id'       => $payAcct->id,
+                'debit'            => 0,
+                'credit'           => $purchase->total,
+                'description'      => "Paid to supplier – {$purchase->purchase_number}",
+            ]);
+
+            $purchase->update([
+                'credit_settled_at'            => $settledAt,
+                'credit_settlement_journal_id' => $entry->id,
+            ]);
+
+            AuditLog::record('credit_settled', "Credit settled for {$purchase->purchase_number}", $purchase);
 
             DB::commit();
             return response()->json($purchase->fresh());

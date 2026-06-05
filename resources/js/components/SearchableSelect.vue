@@ -50,11 +50,12 @@
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
-  modelValue: { default: '' },
-  options:    { type: Array, default: () => [] },
-  labelKey:   { type: String, default: 'name' },
-  valueKey:   { type: String, default: 'id' },
-  placeholder:{ type: String, default: '— Select —' },
+  modelValue:  { default: '' },
+  options:     { type: Array, default: () => [] },
+  labelKey:    { type: String, default: 'name' },
+  valueKey:    { type: String, default: 'id' },
+  placeholder: { type: String, default: '— Select —' },
+  searchKeys:  { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -82,7 +83,8 @@ const filteredOptions = computed(() => {
   if (!q) return props.options
   return props.options.filter(o =>
     String(o[props.labelKey]).toLowerCase().includes(q) ||
-    (o.sub && String(o.sub).toLowerCase().includes(q))
+    (o.sub && String(o.sub).toLowerCase().includes(q)) ||
+    props.searchKeys.some(k => o[k] && String(o[k]).toLowerCase().includes(q))
   )
 })
 

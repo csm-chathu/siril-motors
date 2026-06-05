@@ -223,9 +223,10 @@ function printProductBarcode(product, qty = 1) {
   const barcodeSvg   = createBarcodeSvg(barcodeValue)
   const safeName     = (product.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const safeBarcode  = barcodeValue.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const safeBrand    = (product.brand?.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const safeModel    = (product.model?.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const brandModel   = [safeBrand, safeModel].filter(Boolean).join(' · ')
+  const safeVehicleType = (product.vehicle_type?.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const safeModel       = (product.model?.name ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const brandModel      = [safeVehicleType, safeModel].filter(Boolean).join(' · ')
+  const safePrice    = Number(product.selling_price).toLocaleString('en-LK', { minimumFractionDigits: 2 })
 
   const labelHtml = `
   <div class="label">
@@ -233,6 +234,7 @@ function printProductBarcode(product, qty = 1) {
     ${brandModel ? `<div class="brand-model">${brandModel}</div>` : ''}
     ${barcodeSvg}
     <div class="sku">${safeBarcode}</div>
+    <div class="price">LKR ${safePrice}</div>
   </div>`
 
   const html = `<!doctype html>
@@ -253,6 +255,7 @@ function printProductBarcode(product, qty = 1) {
       text-overflow: ellipsis; width: 100%; text-align: center; line-height: 1.2; flex-shrink: 0; }
     svg { width: 80%; height: 7mm; display: block; flex-shrink: 0; margin: 0 auto; }
     .sku { font-size: 7pt; font-weight: 700; letter-spacing: 1px; text-align: center; margin-top: 0.3mm; line-height: 1; }
+    .price { font-size: 7pt; font-weight: 700; text-align: center; line-height: 1; margin-top: 0.5mm; }
   </style>
 </head>
 <body>

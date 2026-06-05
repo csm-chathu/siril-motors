@@ -64,7 +64,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('purchases',    PurchaseController::class)->except(['update']);
     Route::post('purchases/{purchase}/receive',       [PurchaseController::class, 'receive']);
     Route::patch('purchases/{purchase}/cancel',       [PurchaseController::class, 'cancel']);
-    Route::post('purchases/{purchase}/settle-cheque', [PurchaseController::class, 'settleChequePurchase']);
+    Route::post('purchases/{purchase}/settle-cheque',  [PurchaseController::class, 'settleChequePurchase']);
+    Route::post('purchases/{purchase}/settle-credit',  [PurchaseController::class, 'settleCreditPurchase']);
 
     // Stock Ledger
     Route::get('stock-ledger',          [StockLedgerController::class, 'index']);
