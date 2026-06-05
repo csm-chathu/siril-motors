@@ -36,6 +36,19 @@
       />
     </div>
 
+    <!-- Part Brands -->
+    <div v-if="activeTab === 'part_brands'">
+      <MasterTable
+        title="Part Brands"
+        :rows="partBrands"
+        :columns="[{ key: 'name', label: 'Brand Name' }, { key: 'description', label: 'Description' }]"
+        :loading="loading.part_brands"
+        @add="openModal('part_brands')"
+        @edit="r => openModal('part_brands', r)"
+        @delete="r => deleteRow('part_brands', r)"
+      />
+    </div>
+
     <!-- Quality Types -->
     <div v-if="activeTab === 'quality_types'">
       <MasterTable
@@ -221,14 +234,16 @@ import MasterTable from '@/components/MasterTable.vue'
 // ── state ──────────────────────────────────────────────────
 const tabs = [
   { id: 'part_categories', label: 'Part Categories' },
+  { id: 'part_brands',     label: 'Part Brands' },
   { id: 'quality_types',   label: 'Quality Grades' },
   { id: 'vehicle_types',   label: 'Vehicle Types' },
-  { id: 'brands',          label: 'Brands' },
+  { id: 'brands',          label: 'Vehicle Brands' },
   { id: 'vehicle_models',  label: 'Vehicle Models' },
 ]
 
 const activeTab = ref('part_categories')
 const partCategories = ref([])
+const partBrands     = ref([])
 const qualityTypes   = ref([])
 const vehicleTypes   = ref([])
 const brands         = ref([])
@@ -236,6 +251,7 @@ const vehicleModels  = ref([])
 
 const loading = reactive({
   part_categories: false,
+  part_brands:     false,
   quality_types:   false,
   vehicle_types:   false,
   brands:          false,
@@ -248,6 +264,7 @@ const currentYear = new Date().getFullYear()
 
 const counts = computed(() => ({
   part_categories: partCategories.value.length,
+  part_brands:     partBrands.value.length,
   quality_types:   qualityTypes.value.length,
   vehicle_types:   vehicleTypes.value.length,
   brands:          brands.value.length,
@@ -271,13 +288,15 @@ const modalForm = reactive({
 
 const modalTitleMap = {
   part_categories: 'Part Category',
+  part_brands:     'Part Brand',
   quality_types:   'Quality Grade',
   vehicle_types:   'Vehicle Type',
-  brands:          'Brand',
+  brands:          'Vehicle Brand',
   vehicle_models:  'Vehicle Model',
 }
 const namePlaceholderMap = {
   part_categories: 'e.g. Cooling Parts',
+  part_brands:     'e.g. Bosch',
   quality_types:   'e.g. Genuine',
   vehicle_types:   'e.g. Car',
   brands:          'e.g. Toyota',
@@ -308,6 +327,7 @@ function closeModal() {
 
 const apiPath = {
   part_categories: '/api/part-categories',
+  part_brands:     '/api/part-brands',
   quality_types:   '/api/quality-types',
   vehicle_types:   '/api/vehicle-types',
   brands:          '/api/brands',
@@ -350,7 +370,7 @@ function buildPayload(type) {
 }
 
 function listRef(type) {
-  return { part_categories: partCategories, quality_types: qualityTypes, vehicle_types: vehicleTypes, brands, vehicle_models: vehicleModels }[type]
+  return { part_categories: partCategories, part_brands: partBrands, quality_types: qualityTypes, vehicle_types: vehicleTypes, brands, vehicle_models: vehicleModels }[type]
 }
 
 function updateLocal(type, data) {
@@ -386,6 +406,7 @@ async function confirmDelete() {
 async function fetchAll() {
   await Promise.all([
     fetchList('part_categories', '/api/part-categories'),
+    fetchList('part_brands',     '/api/part-brands'),
     fetchList('quality_types',   '/api/quality-types'),
     fetchList('vehicle_types',   '/api/vehicle-types'),
     fetchList('brands',          '/api/brands'),

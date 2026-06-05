@@ -39,6 +39,16 @@
             />
           </div>
 
+          <!-- Part Brand -->
+          <div>
+            <label class="form-label">Part Brand</label>
+            <SearchableSelect
+              v-model="form.part_brand_id"
+              :options="partBrands"
+              placeholder="Search part brand…"
+            />
+          </div>
+
           <!-- Vehicle Type -->
           <div>
             <label class="form-label">Vehicle Type</label>
@@ -171,13 +181,14 @@ const props = defineProps({
   brands:        { type: Array, default: () => [] },
   vehicleModels: { type: Array, default: () => [] },
   partCategories:{ type: Array, default: () => [] },
+  partBrands:    { type: Array, default: () => [] },
   qualityTypes:  { type: Array, default: () => [] },
 })
 const emit = defineEmits(['close', 'saved'])
 
 const form = reactive({
   name: '', part_number: '', description: '', barcode: '',
-  part_category_id: '', quality_type_id: '',
+  part_category_id: '', part_brand_id: '', quality_type_id: '',
   vehicle_type_id: '', brand_id: '', model_id: '',
   supplier_id: '', rack_location: '',
   purchase_price: '', selling_price: '',

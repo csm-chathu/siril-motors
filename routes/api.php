@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\GLController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\OpeningBalanceController;
+use App\Http\Controllers\Api\PartBrandController;
 use App\Http\Controllers\Api\PartCategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\PurchaseController;
@@ -87,6 +88,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('brands',         BrandController::class);
     Route::apiResource('vehicle-models', VehicleModelController::class);
     Route::apiResource('part-categories', PartCategoryController::class);
+    Route::apiResource('part-brands',     PartBrandController::class);
     Route::apiResource('quality-types',  QualityTypeController::class);
 
     // Tax settings

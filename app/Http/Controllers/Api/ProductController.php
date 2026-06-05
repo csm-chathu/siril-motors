@@ -14,6 +14,7 @@ class ProductController extends Controller
         $user = request()->user();
         $products = Product::with([
                 'partCategory:id,name',
+                'partBrand:id,name',
                 'qualityType:id,name',
                 'vehicleType:id,name',
                 'brand:id,name',
@@ -42,6 +43,7 @@ class ProductController extends Controller
             'name'             => 'required|string|max:200',
             'part_number'      => 'nullable|string|max:100',
             'description'      => 'nullable|string',
+            'part_brand_id'    => 'nullable|exists:part_brands,id',
             'part_category_id' => 'nullable|exists:part_categories,id',
             'quality_type_id'  => 'nullable|exists:quality_types,id',
             'vehicle_type_id'  => 'nullable|exists:vehicle_types,id',
@@ -87,6 +89,7 @@ class ProductController extends Controller
             'name'             => 'required|string|max:200',
             'part_number'      => 'nullable|string|max:100',
             'description'      => 'nullable|string',
+            'part_brand_id'    => 'nullable|exists:part_brands,id',
             'part_category_id' => 'nullable|exists:part_categories,id',
             'quality_type_id'  => 'nullable|exists:quality_types,id',
             'vehicle_type_id'  => 'nullable|exists:vehicle_types,id',

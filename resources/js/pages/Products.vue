@@ -132,6 +132,7 @@
       :brands="brands"
       :vehicle-models="vehicleModels"
       :part-categories="partCategories"
+      :part-brands="partBrands"
       :quality-types="qualityTypes"
       @close="showModal = false"
       @saved="onSaved"
@@ -153,6 +154,7 @@ const vehicleTypes     = ref([])
 const brands           = ref([])
 const vehicleModels    = ref([])
 const partCategories   = ref([])
+const partBrands       = ref([])
 const qualityTypes     = ref([])
 const search           = ref('')
 const partCategoryFilter = ref('')
@@ -183,12 +185,13 @@ async function fetchProducts() {
 }
 
 async function fetchRefs() {
-  const [s, vt, b, vm, pc, qt] = await Promise.all([
+  const [s, vt, b, vm, pc, pb, qt] = await Promise.all([
     axios.get('/api/suppliers/all'),
     axios.get('/api/vehicle-types'),
     axios.get('/api/brands'),
     axios.get('/api/vehicle-models'),
     axios.get('/api/part-categories'),
+    axios.get('/api/part-brands'),
     axios.get('/api/quality-types'),
   ])
   suppliers.value      = s.data
@@ -196,6 +199,7 @@ async function fetchRefs() {
   brands.value         = b.data
   vehicleModels.value  = vm.data
   partCategories.value = pc.data
+  partBrands.value     = pb.data
   qualityTypes.value   = qt.data
 }
 

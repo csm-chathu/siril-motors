@@ -12,7 +12,7 @@ class Product extends Model
 
     protected $fillable = [
         'vehicle_type_id', 'brand_id', 'model_id', 'part_category_id', 'quality_type_id',
-        'supplier_id', 'branch_id', 'sku', 'barcode', 'name', 'part_number', 'description',
+        'supplier_id', 'branch_id', 'sku', 'barcode', 'name', 'part_number', 'part_brand_id', 'description',
         'purchase_price', 'selling_price', 'stock_quantity',
         'min_stock_level', 'rack_location', 'is_active', 'image', 'image_public_id',
     ];
@@ -61,6 +61,11 @@ class Product extends Model
     public function partCategory()
     {
         return $this->belongsTo(PartCategory::class);
+    }
+
+    public function partBrand()
+    {
+        return $this->belongsTo(PartBrand::class);
     }
 
     public function qualityType()
