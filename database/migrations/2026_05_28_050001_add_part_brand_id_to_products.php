@@ -6,14 +6,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void {
         Schema::table('products', function (Blueprint $table) {
-            $table->foreignId('part_brand_id')->nullable()->after('part_category_id')
-                  ->constrained('part_brands')->nullOnDelete();
+            $table->unsignedBigInteger('part_brand_id')->nullable()->after('part_category_id');
         });
     }
 
     public function down(): void {
         Schema::table('products', function (Blueprint $table) {
-            $table->dropForeign(['part_brand_id']);
             $table->dropColumn('part_brand_id');
         });
     }
