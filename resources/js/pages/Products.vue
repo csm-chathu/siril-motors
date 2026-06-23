@@ -24,7 +24,7 @@
         <table class="w-full">
           <thead class="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th class="table-th">SKU</th>
+              <th class="table-th">Part Number</th>
               <th class="table-th">Part Name</th>
               <th class="table-th">Part Category</th>
               <th class="table-th">Vehicle / Brand / Model</th>
@@ -41,23 +41,9 @@
             <tr v-for="p in products.data" :key="p.id" class="hover:bg-gray-50">
               <td class="table-td font-mono text-xs">{{ p.sku }}</td>
               <td class="table-td">
-                <div class="flex items-center gap-2">
-                  <img
-                    v-if="p.image"
-                    :src="p.image"
-                    alt="part"
-                    class="w-9 h-9 rounded-md object-cover border border-gray-200"
-                  />
-                  <div
-                    v-else
-                    class="w-9 h-9 rounded-md bg-gray-100 border border-gray-200 flex items-center justify-center text-[10px] text-gray-400"
-                  >
-                    IMG
-                  </div>
-                  <div>
-                    <span class="font-medium">{{ p.name }}</span>
-                    <p v-if="p.barcode" class="text-xs text-gray-400 font-mono">{{ p.barcode }}</p>
-                  </div>
+                <div>
+                  <span class="font-medium">{{ p.name }}</span>
+                  <p v-if="p.image" class="text-xs text-gray-400 font-mono">{{ p.image.split('/').pop() }}</p>
                 </div>
               </td>
               <td class="table-td text-gray-500">{{ p.part_category?.name || '—' }}</td>
