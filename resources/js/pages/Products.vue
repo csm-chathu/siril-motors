@@ -239,8 +239,7 @@ function printProductBarcode(product, qty = 1) {
     .label { width: 30mm; height: 20mm; padding: 2mm 1.5mm 0.5mm;
       display: flex; flex-direction: column; align-items: center; justify-content: space-between; overflow: hidden;
       page-break-after: always; }
-    .name { font-size: 6.5pt; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical; overflow: hidden; width: 100%; text-align: center; line-height: 1.2; flex-shrink: 0; }
+    .name { font-size: 6.5pt; font-weight: 700; width: 100%; text-align: center; line-height: 1.2; flex-shrink: 0; word-break: break-word; }
     .brand-model { font-size: 5.5pt; color: #555; white-space: nowrap; overflow: hidden;
       text-overflow: ellipsis; width: 100%; text-align: center; line-height: 1.2; flex-shrink: 0; }
     svg { width: 80%; height: 7mm; display: block; flex-shrink: 0; margin: 0 auto; }
