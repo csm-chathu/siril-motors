@@ -39,10 +39,10 @@
           </thead>
           <tbody class="divide-y divide-gray-100">
             <tr v-for="p in products.data" :key="p.id" class="hover:bg-gray-50">
-              <td class="table-td font-mono text-xs">{{ p.sku }}</td>
+              <td class="table-td font-mono text-xs">{{ p.part_number }}</td>
               <td class="table-td">
                 <div>
-                  <span class="font-medium">{{ p.name }}</span>
+                  <span class="font-medium line-clamp-2">{{ p.name }}</span>
                   <p v-if="p.image" class="text-xs text-gray-400 font-mono">{{ p.image.split('/').pop() }}</p>
                 </div>
               </td>
@@ -239,8 +239,8 @@ function printProductBarcode(product, qty = 1) {
     .label { width: 30mm; height: 20mm; padding: 2mm 1.5mm 0.5mm;
       display: flex; flex-direction: column; align-items: center; justify-content: space-between; overflow: hidden;
       page-break-after: always; }
-    .name { font-size: 6.5pt; font-weight: 700; white-space: nowrap; overflow: hidden;
-      text-overflow: ellipsis; width: 100%; text-align: center; line-height: 1; flex-shrink: 0; }
+    .name { font-size: 6.5pt; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden; width: 100%; text-align: center; line-height: 1.2; flex-shrink: 0; }
     .brand-model { font-size: 5.5pt; color: #555; white-space: nowrap; overflow: hidden;
       text-overflow: ellipsis; width: 100%; text-align: center; line-height: 1.2; flex-shrink: 0; }
     svg { width: 80%; height: 7mm; display: block; flex-shrink: 0; margin: 0 auto; }
