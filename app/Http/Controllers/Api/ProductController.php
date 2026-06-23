@@ -25,7 +25,8 @@ class ProductController extends Controller
             ->when(request('search'), fn($q, $s) => $q->where(function ($inner) use ($s) {
                 $inner->where('name', 'like', "%$s%")
                     ->orWhere('sku', 'like', "%$s%")
-                    ->orWhere('barcode', 'like', "%$s%");
+                    ->orWhere('barcode', 'like', "%$s%")
+                    ->orWhere('part_number', 'like', "%$s%");
             }))
             ->when(request('part_category_id'), fn($q, $c) => $q->where('part_category_id', $c))
             ->when(request('vehicle_type_id'),  fn($q, $v) => $q->where('vehicle_type_id', $v))
